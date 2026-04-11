@@ -121,7 +121,7 @@ interface ExercicePrep {
                     <th pSortableColumn="dateFin">Fin <p-sortIcon field="dateFin" /></th>
                     <th pSortableColumn="testCount">Tests <p-sortIcon field="testCount" /></th>
                     <th class="text-center">Candidatures</th>
-                    <th style="width: 8rem">Actions</th>
+                    <th style="width: 8rem" class="text-center">Actions</th>
                 </tr>
             </ng-template>
             <ng-template #body let-offer>
@@ -159,14 +159,126 @@ interface ExercicePrep {
                             tooltipPosition="top" />
                         <span *ngIf="(offer.candidateCount || 0) === 0" class="text-xs text-slate-300 italic">Aucune</span>
                     </td>
-                    <td>
-                        <p-button icon="pi pi-pencil" class="mr-2" [rounded]="true" [outlined]="true" (click)="editOffer(offer)" />
-                        <p-button icon="pi pi-trash" severity="danger" [rounded]="true" [outlined]="true" (click)="deleteOffer(offer)" />
+                    <td class="text-center">
+                        <div class="flex gap-2 justify-center">
+                            <p-button icon="pi pi-eye" [rounded]="true" [text]="true" (click)="viewOfferDetails(offer)" pTooltip="Voir plus" tooltipPosition="top" />
+                            <p-button icon="pi pi-pencil" [rounded]="true" [outlined]="true" (click)="editOffer(offer)" pTooltip="Modifier" tooltipPosition="top" />
+                            <p-button icon="pi pi-trash" severity="danger" [rounded]="true" [outlined]="true" (click)="deleteOffer(offer)" pTooltip="Supprimer" tooltipPosition="top" />
+                        </div>
                     </td>
                 </tr>
             </ng-template>
         </p-table>
 
+        <!-- View Offer Details Dialog -->
+        <p-dialog [(visible)]="viewOfferDialog" [style]="{ width: '700px' }" [header]="'Détails - ' + selectedOfferForView?.title" [modal]="true" class="custom-dialog">
+            <div *ngIf="selectedOfferForView" class="flex flex-col gap-6 pt-2">
+                <div class="flex items-center justify-between bg-slate-50 dark:bg-slate-800/50 p-6 rounded-2xl border border-slate-100 dark:border-slate-700">
+                    <div class="flex items-center gap-4">
+                        <div class="w-16 h-16 rounded-2xl bg-[#063970] text-white flex items-center justify-center shadow-lg">
+                            <i class="pi pi-briefcase text-3xl"></i>
+                        </div>
+                        <div>
+                            <h2 class="text-2xl font-black text-slate-800 dark:text-slate-100 m-0">{{ selectedOfferForView.title }}</h2>
+                            <div class="flex items-center gap-2 mt-1 text-slate-500 dark:text-slate-400 font-bold text-xs uppercase tracking-widest">
+                                <i class="pi pi-map-marker"></i>
+                                {{ selectedOfferForView.location }}
+                            </div>
+                        </div>
+                    </div>
+                    <p-tag [value]="selectedOfferForView.badge || 'Ouvert'" severity="info" [rounded]="true" styleClass="px-4 py-1.5 font-black uppercase text-[10px]" />
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="p-4 rounded-xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
+                        <div class="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 flex items-center gap-2">
+                            <i class="pi pi-calendar text-blue-500"></i> Date de début
+                        </div>
+                        <div class="text-slate-800 dark:text-slate-200 font-bold">{{ selectedOfferForView.dateDebut | date:'dd MMMM yyyy' }}</div>
+                    </div>
+                    <div class="p-4 rounded-xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
+                        <div class="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 flex items-center gap-2">
+                            <i class="pi pi-calendar-times text-indigo-500"></i> Date de fin
+                        </div>
+                        <div class="text-slate-800 dark:text-slate-200 font-bold">{{ selectedOfferForView.dateFin | date:'dd MMMM yyyy' }}</div>
+                    </div>
+                </div>
+
+                <div class="flex flex-col gap-2">
+                    <h5 class="text-xs font-black text-slate-900 dark:text-slate-100 uppercase tracking-[0.2em] flex items-center gap-2 mb-1">
+                        <i class="pi pi-align-left text-blue-500"></i> Mission & Détails
+                    </h5>
+                    <div class="bg-slate-50 dark:bg-slate-800/30 p-5 rounded-2xl border border-dashed border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 leading-relaxed text-sm whitespace-pre-wrap">
+                        {{ selectedOfferForView.details || selectedOfferForView.desc || 'Aucune description détaillée.' }}
+                    </div>
+                </div>
+
+                <div class="flex flex-col gap-2">
+                    <h5 class="text-xs font-black text-slate-900 dark:text-slate-100 uppercase tracking-[0.2em] flex items-center gap-2 mb-1">
+                        <i class="pi pi-bolt text-amber-500"></i> Compétences Clés
+                    </h5>
+                    <div class="flex flex-wrap gap-2 mt-1">
+                        <span *ngFor="let tech of selectedOfferForView.techs" 
+                              class="px-3 py-1.5 rounded-lg bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 text-xs font-black border border-amber-100 dark:border-amber-800/50 uppercase tracking-wider shadow-sm">
+                            {{ tech }}
+                        </span>
+                        <span *ngIf="!selectedOfferForView.techs || selectedOfferForView.techs.length === 0" class="text-slate-400 italic text-sm">Aucune compétence spécifiée.</span>
+                    </div>
+                </div>
+
+                <div class="flex flex-col gap-3">
+                    <h5 class="text-xs font-black text-slate-900 dark:text-slate-100 uppercase tracking-[0.2em] flex items-center gap-2 mb-1">
+                        <i class="pi pi-chevron-right text-indigo-500"></i> Tests techniques
+                    </h5>
+                    <div class="flex flex-col gap-2">
+                        <div *ngFor="let t of viewingOfferTests()" class="flex items-center justify-between p-3 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-xl shadow-sm hover:border-indigo-200 transition-colors">
+                            <div class="flex items-center gap-3">
+                                <div class="w-8 h-8 rounded-lg bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 flex items-center justify-center text-xs">
+                                    <i class="pi pi-file"></i>
+                                </div>
+                                <div class="flex flex-col">
+                                    <span class="text-sm font-bold text-slate-800 dark:text-slate-200">{{ t.titre }}</span>
+                                    <span class="text-[10px] text-slate-400 font-bold uppercase">{{ t.dureeMinutes }} minutes</span>
+                                </div>
+                            </div>
+                            <p-button icon="pi pi-eye" [text]="true" [rounded]="true" size="small" (onClick)="previewTest(t)" pTooltip="Aperçu" />
+                        </div>
+                        <div *ngIf="viewingOfferTests().length === 0" class="p-4 text-center bg-slate-50 dark:bg-slate-800/20 rounded-xl border border-dashed border-slate-200 dark:border-slate-700 text-slate-400 italic text-sm">
+                            Aucun test associé à cette offre.
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4 mt-2">
+                    <div class="bg-blue-50/50 dark:bg-blue-900/10 p-4 rounded-xl border border-blue-100 dark:border-blue-900/30 flex items-center justify-between">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-lg bg-blue-100 dark:bg-blue-800/50 text-blue-600 flex items-center justify-center">
+                                <i class="pi pi-list"></i>
+                            </div>
+                            <span class="font-bold text-slate-700 dark:text-slate-300">Tests techniques</span>
+                        </div>
+                        <span class="font-black text-blue-600 dark:text-blue-400 text-xl">{{ selectedOfferForView.testCount || 0 }}</span>
+                    </div>
+                    <div class="bg-indigo-50/50 dark:bg-indigo-900/10 p-4 rounded-xl border border-indigo-100 dark:border-indigo-900/30 flex items-center justify-between">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-lg bg-indigo-100 dark:bg-indigo-800/50 text-indigo-600 flex items-center justify-center">
+                                <i class="pi pi-users"></i>
+                            </div>
+                            <span class="font-bold text-slate-700 dark:text-slate-300">Candidatures</span>
+                        </div>
+                        <span class="font-black text-indigo-600 dark:text-indigo-400 text-xl">{{ selectedOfferForView.candidateCount || 0 }}</span>
+                    </div>
+                </div>
+            </div>
+            <ng-template #footer>
+                <div class="flex justify-end gap-3 mt-4">
+                    <p-button label="Modifier l'offre" icon="pi pi-pencil" [text]="true" (click)="viewOfferDialog.set(false); editOffer(selectedOfferForView!)" class="text-slate-500" />
+                    <p-button label="Fermer" icon="pi pi-times" [style]="{'background-color':'#063970','border-color':'#063970'}" (click)="viewOfferDialog.set(false)" />
+                </div>
+            </ng-template>
+        </p-dialog>
+
+        <!-- Edit/New Offer Dialog -->
         <p-dialog [(visible)]="offerDialog" [style]="{ width: '600px' }" [breakpoints]="{ '1199px': '75vw', '575px': '90vw' }" header="Détails de l'offre de stage" [modal]="true" class="p-fluid">
             <ng-template #content>
                 <div class="flex flex-col gap-4 pt-2">
@@ -289,13 +401,23 @@ interface ExercicePrep {
                               (onClick)="openAssignTest()" />
                 </div>
 
-                <p-table [value]="associatedTests" [tableStyle]="{ 'min-width': '100%' }" class="p-fluid">
+                <p-table [value]="associatedTests()" [tableStyle]="{ 'min-width': '100%' }" class="p-fluid">
                     <ng-template #header>
                         <tr class="bg-slate-50 text-[10px] uppercase font-black text-slate-400 tracking-widest border-0">
                             <th style="width: 4rem" *ngIf="selectedOfferForTest && selectedOfferForTest.testSelectionMode === 'UN_CHOIX'" class="bg-transparent"></th>
                             <th class="bg-transparent">Titre du Test</th>
                             <th style="width: 8rem" class="bg-transparent text-center">Durée</th>
                             <th style="width: 9rem" class="bg-transparent text-right pr-4">Actions</th>
+                        </tr>
+                    </ng-template>
+                    <ng-template #emptymessage>
+                        <tr>
+                            <td [attr.colspan]="selectedOfferForTest.testSelectionMode === 'UN_CHOIX' ? 4 : 3" class="text-center p-8 text-slate-400 italic">
+                                <div class="flex flex-col items-center gap-2">
+                                    <i class="pi pi-inbox text-3xl opacity-20"></i>
+                                    <span>Aucun test associé ou chargement...</span>
+                                </div>
+                            </td>
                         </tr>
                     </ng-template>
                     <ng-template #body let-t>
@@ -421,10 +543,18 @@ interface ExercicePrep {
                             <label class="block font-bold text-slate-800 mb-2">Durée (minutes)</label>
                             <p-inputnumber [(ngModel)]="test.dureeMinutes" [min]="5" [max]="240" [showButtons]="true" placeholder="60" [fluid]="true" />
                         </div>
-                        <div class="flex flex-col">
+                        <div class="flex flex-col" *ngIf="!selectedOfferForTest">
                             <label class="block font-bold text-slate-800 mb-2">Offre de stage</label>
-                            <p-select [(ngModel)]="test.offerId" [options]="offers()" optionLabel="title" optionValue="id" placeholder="Choisir une offre" appendTo="body" [fluid]="true" />
-                            <small class="text-red-500 mt-1 font-bold" *ngIf="submitted&&!test.offerId">L'offre est requise.</small>
+                            <p-select [(ngModel)]="test.offerIds" [options]="offers()" optionLabel="title" optionValue="id" 
+                                placeholder="Choisir une offre (Optionnel)" appendTo="body" [fluid]="true" [showClear]="true" />
+                            <small class="text-blue-500 italic mt-1 font-bold">Le test peut être lié à une offre à la fois via ce menu.</small>
+                        </div>
+                        <div class="flex flex-col" *ngIf="selectedOfferForTest">
+                            <label class="block font-bold text-slate-400 mb-2">Offre associée</label>
+                            <div class="p-3 bg-slate-50 border border-slate-100 rounded-lg text-slate-600 font-bold text-sm">
+                                <i class="pi pi-briefcase mr-2 text-blue-500"></i>
+                                {{ selectedOfferForTest.title }}
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -852,7 +982,7 @@ export class OfferManagement implements OnInit {
     viewTestsDialog: boolean = false;
     assignTestDialog: boolean = false;
     addTestChoiceDialog: boolean = false;
-    associatedTests: TechnicalTest[] = [];
+    associatedTests = signal<TechnicalTest[]>([]);
     filteredTests: TechnicalTest[] = [];
     previewVisible: boolean = false;
     selectedTestForPreview: TechnicalTest | null = null;
@@ -862,6 +992,11 @@ export class OfferManagement implements OnInit {
     viewApplicationsDialog: boolean = false;
     selectedOfferForApps: InternshipOffer | null = null;
     filteredApplications: any[] = [];
+
+    // View Details
+    viewOfferDialog = signal(false);
+    selectedOfferForView: InternshipOffer | null = null;
+    viewingOfferTests = signal<TechnicalTest[]>([]);
 
     // ─── Options ────────────────────────────────────────────────
     typeQuestions = [
@@ -889,6 +1024,19 @@ export class OfferManagement implements OnInit {
     }
 
     ngOnInit() {}
+
+    async viewOfferDetails(offer: InternshipOffer) {
+        this.selectedOfferForView = offer;
+        this.viewingOfferTests.set([]);
+        this.viewOfferDialog.set(true);
+        
+        try {
+            const tests = await this.testService.getTestsByOffer(offer.id);
+            this.viewingOfferTests.set(tests);
+        } catch (err) {
+            console.error('Error fetching tests for view', err);
+        }
+    }
 
     onGlobalFilter(table: Table, event: Event) {
         table.filterGlobal((event.target as HTMLInputElement).value, 'contains');
@@ -974,26 +1122,42 @@ export class OfferManagement implements OnInit {
             this.offer = {};
         }
     }
-    viewTests(offer: InternshipOffer) {
+    async viewTests(offer: InternshipOffer) {
         this.selectedOfferForTest = offer;
-        this.associatedTests = this.testService.getTestsByOffer(offer.id);
-        this.viewTestsDialog = true;
+        this.associatedTests.set([]);
+        
+        try {
+            // Load data before showing dialog to avoid NG0100
+            const data = await this.testService.getTestsByOffer(offer.id);
+            this.associatedTests.set(data);
+            this.viewTestsDialog = true;
+        } catch (err) {
+            this.messageService.add({ severity: 'error', summary: 'Erreur', detail: 'Échec du chargement des tests' });
+        }
     }
 
-    saveQuickTest() {
+    async saveQuickTest() {
         this.testSubmitted = true;
         if (this.newTest.titre?.trim() && this.newTest.description?.trim()) {
-            this.testService.addTest({
+            await this.testService.addTest({
                 titre: this.newTest.titre,
                 description: this.newTest.description,
                 dureeMinutes: this.newTest.dureeMinutes || 60,
-                offerId: this.newTest.offerId!
+                offerIds: this.newTest.offerIds || []
             });
 
-            this.internshipService.updateOffer({
+            const currentCount = this.selectedOfferForTest!.testCount || 0;
+            const nextCount = currentCount + 1;
+
+            // Updated offer object
+            const updatedOffer = {
                 ...this.selectedOfferForTest!,
-                testCount: (this.selectedOfferForTest!.testCount || 0) + 1
-            });
+                testCount: nextCount
+            };
+            
+            // Optimistic update
+            await this.internshipService.updateOffer(updatedOffer);
+            this.selectedOfferForTest!.testCount = nextCount;
 
             this.messageService.add({
                 severity: 'success',
@@ -1020,7 +1184,7 @@ export class OfferManagement implements OnInit {
     openNewTestWizard() {
         this.test = { 
             dureeMinutes: 60,
-            offerId: undefined // Enforce empty choice by default
+            offerIds: this.selectedOfferForTest ? [this.selectedOfferForTest.id] : []
         };
         this.wizardStep = 1;
         this.submitted = false;
@@ -1040,23 +1204,51 @@ export class OfferManagement implements OnInit {
     }
 
     deleteTestFromOffer(test: TechnicalTest) {
+        if (!this.selectedOfferForTest) return;
+
         this.confirmationService.confirm({
             message: 'Voulez-vous vraiment détacher ce test de cette offre ?',
             header: 'Confirmer le détachement',
             icon: 'pi pi-exclamation-triangle',
-            accept: () => {
-                this.testService.deleteTest(test.id);
-                this.internshipService.updateOffer({
-                    ...this.selectedOfferForTest!,
-                    testCount: Math.max(0, (this.selectedOfferForTest!.testCount || 0) - 1)
-                });
-                this.associatedTests = this.testService.getTestsByOffer(this.selectedOfferForTest!.id);
-                this.messageService.add({
-                    severity: 'success',
-                    summary: 'Succès',
-                    detail: 'Test détaché de l\'offre',
-                    life: 3000
-                });
+            accept: async () => {
+                try {
+                    // Filter out this offer from the test's associations
+                    const updatedOfferIds = (test.offerIds || []).filter(id => id !== this.selectedOfferForTest!.id);
+                    
+                    // Update the test on backend (only removing this offer ID)
+                    await this.testService.updateTest({
+                        ...test,
+                        offerIds: updatedOfferIds
+                    });
+
+                    // Update UI - Counter -1
+                    const updatedOffer = {
+                        ...this.selectedOfferForTest!,
+                        testCount: Math.max(0, (this.selectedOfferForTest!.testCount || 0) - 1)
+                    };
+                    
+                    // Update global signal (for main table)
+                    await this.internshipService.updateOffer(updatedOffer);
+                    
+                    // Update local object for the dialog counter
+                    this.selectedOfferForTest!.testCount = updatedOffer.testCount;
+
+                    // Update local associated tests list (remove it from view)
+                    this.associatedTests.update(tests => tests.filter(at => at.id !== test.id));
+
+                    this.messageService.add({
+                        severity: 'success',
+                        summary: 'Succès',
+                        detail: `"${test.titre}" détaché de l'offre`,
+                        life: 3000
+                    });
+                } catch (err) {
+                    this.messageService.add({ 
+                        severity: 'error', 
+                        summary: 'Erreur', 
+                        detail: 'Échec du détachement du test' 
+                    });
+                }
             }
         });
     }
@@ -1065,7 +1257,7 @@ export class OfferManagement implements OnInit {
         if (!this.selectedOfferForTest) return;
         
         const allTests = this.testService.getTests()();
-        this.filteredTests = allTests.filter((t: TechnicalTest) => t.offerId !== this.selectedOfferForTest?.id);
+        this.filteredTests = allTests.filter((t: TechnicalTest) => !t.offerIds.includes(this.selectedOfferForTest!.id));
         this.assignTestDialog = true;
     }
 
@@ -1073,33 +1265,62 @@ export class OfferManagement implements OnInit {
         const query = (event.target as HTMLInputElement).value.toLowerCase();
         const allTests = this.testService.getTests()();
         this.filteredTests = allTests.filter((t: TechnicalTest) => 
-            t.offerId !== this.selectedOfferForTest?.id && 
+            !t.offerIds.includes(this.selectedOfferForTest!.id) && 
             (t.titre.toLowerCase().includes(query) || t.description.toLowerCase().includes(query))
         );
     }
 
-    assignExistingTest(test: TechnicalTest) {
+    async assignExistingTest(test: TechnicalTest) {
         if (!this.selectedOfferForTest) return;
 
-        this.testService.updateTest({
-            ...test,
-            offerId: this.selectedOfferForTest.id
-        });
-
-        this.internshipService.updateOffer({
-            ...this.selectedOfferForTest,
-            testCount: (this.selectedOfferForTest.testCount || 0) + 1
-        });
-
-        this.associatedTests = this.testService.getTestsByOffer(this.selectedOfferForTest.id);
+        const newOfferIds = [...(test.offerIds || [])];
+        if (newOfferIds.includes(this.selectedOfferForTest.id)) {
+            this.assignTestDialog = false;
+            return;
+        }
         
+        newOfferIds.push(this.selectedOfferForTest.id);
+
+        // --- INSTANT UI FEEDBACK ---
+        const updatedTest = { ...test, offerIds: newOfferIds };
+        
+        // Calculate next count
+        const currentCount = this.selectedOfferForTest.testCount || 0;
+        const nextCount = currentCount + 1;
+        
+        // 1. Remove from selection list immediately 
+        this.filteredTests = this.filteredTests.filter(t => t.id !== test.id);
+        
+        // 2. Add to associated tests list for the current modal view
+        const currentAssociated = this.associatedTests();
+        if (!currentAssociated.find(at => at.id === test.id)) {
+            this.associatedTests.update(tests => [...tests, updatedTest]);
+        }
+
+        // 3. Update the main table counter instantly via Signal
+        // 1. Update Test Association FIRST (Persistence)
+        await this.testService.updateTest(updatedTest);
+
+        // 2. Update Offer count SECOND (UI Sync)
+        const updatedOffer = {
+            ...this.selectedOfferForTest,
+            testCount: nextCount
+        };
+        
+        // Propagate changes to signals (Optimistic)
+        await this.internshipService.updateOffer(updatedOffer);
+        
+        // Ensure local reference is updated for subsequent adds in same dialog session
+        this.selectedOfferForTest.testCount = nextCount;
+
         this.messageService.add({
             severity: 'success',
-            summary: 'Test Associé',
-            detail: `"${test.titre}" a été lié à cette offre.`,
-            life: 3000
+            summary: 'Succès',
+            detail: `Le test "${test.titre}" a été associé.`,
+            life: 2000
         });
 
+        // Close dialog
         this.assignTestDialog = false;
     }
 
@@ -1160,7 +1381,8 @@ export class OfferManagement implements OnInit {
 
     nextStep() {
         this.submitted = true;
-        if (this.test.titre?.trim() && this.test.description?.trim() && this.test.offerId) {
+        // Offer is optional
+        if (this.test.titre?.trim() && this.test.description?.trim()) {
             this.wizardStep = 2;
             this.submitted = false;
         }
@@ -1168,15 +1390,16 @@ export class OfferManagement implements OnInit {
 
     async saveWizard() {
         this.submitted = true;
-        if (this.test.titre?.trim() && this.test.description?.trim() && this.test.offerId) {
+        if (this.test.titre?.trim() && this.test.description?.trim()) {
             try {
-                const newTestId = await this.testService.addTest({
-                    titre: this.test.titre,
-                    description: this.test.description,
+                const savedTest = await this.testService.addTest({
+                    titre: this.test.titre!,
+                    description: this.test.description!,
                     dureeMinutes: this.test.dureeMinutes || 60,
-                    offerId: this.test.offerId,
-                    exerciceCount: this.exercicesPrep.length
+                    offerIds: this.test.offerIds || []
                 });
+
+                const newTestId = savedTest.id;
 
                 for (const exPrep of this.exercicesPrep) {
                     let exId = exPrep.existingExerciceId;
@@ -1189,10 +1412,25 @@ export class OfferManagement implements OnInit {
                     }
                 }
 
-                await this.internshipService.updateOffer({
-                    ...this.selectedOfferForTest!,
-                    testCount: (this.selectedOfferForTest!.testCount || 0) + 1
-                });
+                // Update UI - Count
+                if (this.selectedOfferForTest) {
+                    const currentCount = this.selectedOfferForTest.testCount || 0;
+                    const nextCount = currentCount + 1;
+
+                    const updatedOffer = {
+                        ...this.selectedOfferForTest,
+                        testCount: nextCount
+                    };
+                    
+                    // Update signal for main table
+                    await this.internshipService.updateOffer(updatedOffer);
+                    
+                    // Update local reference
+                    this.selectedOfferForTest.testCount = nextCount;
+                    
+                    // Update associated tests list if it is active
+                    this.associatedTests.update(tests => [...tests, savedTest]);
+                }
 
                 this.messageService.add({ severity: 'success', summary: 'Succès', detail: 'Test créé avec succès', life: 3000 });
                 this.hideWizardDialog();

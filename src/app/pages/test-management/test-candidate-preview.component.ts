@@ -156,7 +156,7 @@ export class TestCandidatePreviewComponent implements OnChanges {
 
     loadContent() {
         if (!this.test) return;
-        this.exercicesPrep = this.exerciceService.getExercicesByTest(this.test.id).map(ex => ({
+        this.exercicesPrep = this.exerciceService.getExercicesByTest(this.test.id).map((ex: any) => ({
             ...ex,
             questions: this.questionService.getQuestionsByExercice(ex.id)
         }));

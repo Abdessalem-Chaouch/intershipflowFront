@@ -15,7 +15,7 @@ import { InputIconModule } from 'primeng/inputicon';
 import { IconFieldModule } from 'primeng/iconfield';
 import { ConfirmDialogModule } from 'primeng/confirmdialog';
 import { PasswordModule } from 'primeng/password';
-import { User, UserService } from '@/app/pages/service/user.service';
+import { User, UserService } from '@/app/services/user.service';
 
 interface Column {
     field: string;
@@ -295,6 +295,7 @@ export class UserManagement implements OnInit {
     selectedIntern: User | null = null;
     managedInterns: User[] = [];
     selectedSupervisorId: string | null = null;
+    oldUsername: string | null = null;
 
     @ViewChild('dt') dt!: Table;
 
@@ -305,7 +306,7 @@ export class UserManagement implements OnInit {
     ) {}
 
     ngOnInit() {
-        this.userService.getUsers().then((data) => this.users.set(data));
+        this.loadUsers();
 
         this.roles = [
             { label: 'Admin', value: 'Admin' },
@@ -407,7 +408,17 @@ export class UserManagement implements OnInit {
 
     editUser(user: User) {
         this.user = { ...user };
+        this.oldUsername = user.username || null;
         this.userDialog = true;
+    }
+
+    async loadUsers() {
+        try {
+            const data = await this.userService.getUsers();
+            this.users.set(data);
+        } catch (err) {
+            this.messageService.add({ severity: 'error', summary: 'Erreur', detail: 'Échec du chargement des utilisateurs' });
+        }
     }
 
     deleteSelectedUsers() {
@@ -415,15 +426,15 @@ export class UserManagement implements OnInit {
             message: 'Êtes-vous sûr de vouloir supprimer les utilisateurs sélectionnés ?',
             header: 'Confirmer',
             icon: 'pi pi-exclamation-triangle',
-            accept: () => {
-                this.users.set(this.users().filter((val) => !this.selectedUsers?.includes(val)));
-                this.selectedUsers = null;
-                this.messageService.add({
-                    severity: 'success',
-                    summary: 'Succès',
-                    detail: 'Utilisateurs supprimés',
-                    life: 3000
-                });
+            accept: async () => {
+                if (this.selectedUsers) {
+                    for (const u of this.selectedUsers) {
+                        if (u.username) await this.userService.deleteUser(u.username);
+                    }
+                    this.loadUsers();
+                    this.selectedUsers = null;
+                    this.messageService.add({ severity: 'success', summary: 'Succès', detail: 'Utilisateurs supprimés', life: 3000 });
+                }
             }
         });
     }
@@ -438,48 +449,41 @@ export class UserManagement implements OnInit {
             message: 'Êtes-vous sûr de vouloir supprimer ' + user.firstName + ' ' + user.lastName + ' ?',
             header: 'Confirmer',
             icon: 'pi pi-exclamation-triangle',
-            accept: () => {
-                this.users.set(this.users().filter((val) => val.id !== user.id));
-                this.user = {};
-                this.messageService.add({
-                    severity: 'success',
-                    summary: 'Succès',
-                    detail: 'Utilisateur supprimé',
-                    life: 3000
-                });
+            accept: async () => {
+                if (user.username) {
+                    try {
+                        await this.userService.deleteUser(user.username);
+                        this.loadUsers();
+                        this.user = {};
+                        this.messageService.add({ severity: 'success', summary: 'Succès', detail: 'Utilisateur supprimé', life: 3000 });
+                    } catch (err) {
+                        this.messageService.add({ severity: 'error', summary: 'Erreur', detail: 'Échec de la suppression' });
+                    }
+                }
             }
         });
     }
 
-    saveUser() {
+    async saveUser() {
         this.submitted = true;
 
         if (this.user.firstName?.trim() && this.user.lastName?.trim() && this.user.email?.trim() && this.user.username?.trim() && this.user.role) {
-            let _users = [...this.users()];
-            if (this.user.id) {
-                const index = _users.findIndex((u) => u.id === this.user.id);
-                _users[index] = this.user;
-                this.users.set(_users);
-                this.messageService.add({
-                    severity: 'success',
-                    summary: 'Succès',
-                    detail: 'Utilisateur mis à jour',
-                    life: 3000
-                });
-            } else {
-                this.user.id = Math.floor(Math.random() * 1000).toString();
-                _users.push(this.user);
-                this.users.set(_users);
-                this.messageService.add({
-                    severity: 'success',
-                    summary: 'Succès',
-                    detail: 'Utilisateur créé',
-                    life: 3000
-                });
-            }
+            try {
+                if (this.user.id && this.oldUsername) {
+                    await this.userService.editUser(this.oldUsername, this.user);
+                    this.messageService.add({ severity: 'success', summary: 'Succès', detail: 'Utilisateur mis à jour', life: 3000 });
+                } else {
+                    await this.userService.createUser(this.user);
+                    this.messageService.add({ severity: 'success', summary: 'Succès', detail: 'Utilisateur créé', life: 3000 });
+                }
 
-            this.userDialog = false;
-            this.user = {};
+                await this.loadUsers();
+                this.userDialog = false;
+                this.user = {};
+            } catch (err) {
+                console.error(err);
+                this.messageService.add({ severity: 'error', summary: 'Erreur', detail: "Échec de l'enregistrement de l'utilisateur" });
+            }
         }
     }
 

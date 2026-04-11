@@ -8,7 +8,8 @@ export interface Question {
     typeQuestion: 'QCU' | 'QCM' | 'TRUE_FALSE' | 'QUESTION_REPONSE';
     propositions?: string[];
     reponsesCorrectes?: string[];
-    exerciceId: string;
+    exerciceIds: string[];
+    exerciceId?: string; // For UI compatibility
 }
 
 export interface QuestionDTO {
@@ -17,7 +18,8 @@ export interface QuestionDTO {
     typeQuestion: 'QCU' | 'QCM' | 'TRUE_FALSE' | 'QUESTION_REPONSE';
     propositions?: string[];
     reponsesCorrectes?: string[];
-    exerciceId: number;
+    exerciceIds?: number[];
+    exerciceId?: number; // For compatibility
 }
 
 @Injectable({
@@ -43,13 +45,15 @@ export class QuestionService {
     }
 
     private mapToQuestion(dto: QuestionDTO): Question {
+        const exerciceIds = (dto.exerciceIds || []).map(id => id.toString());
         return {
             id: dto.id.toString(),
             enonce: dto.enonce,
             typeQuestion: dto.typeQuestion,
             propositions: dto.propositions,
             reponsesCorrectes: dto.reponsesCorrectes,
-            exerciceId: dto.exerciceId.toString()
+            exerciceIds,
+            exerciceId: dto.exerciceId?.toString() || (exerciceIds.length > 0 ? exerciceIds[0] : undefined)
         };
     }
 
@@ -58,22 +62,35 @@ export class QuestionService {
     }
 
     getQuestionsByExercice(exerciceId: string): Question[] {
-        return this.questions().filter(q => q.exerciceId === exerciceId);
+        return this.questions().filter(q => q.exerciceIds.includes(exerciceId));
     }
 
-    async addQuestion(question: Omit<Question, 'id'>) {
-        const dto = {
-            enonce: question.enonce,
-            typeQuestion: question.typeQuestion,
-            propositions: question.propositions,
-            reponsesCorrectes: question.reponsesCorrectes,
-            exerciceId: parseInt(question.exerciceId)
-        };
-
+    async addQuestion(question: Partial<Question> & { exerciceId?: string, exerciceIds?: string[] }) {
         try {
-            const saved = await firstValueFrom(this.http.post<QuestionDTO>(`${this.apiUrl}/exercice/${dto.exerciceId}`, dto));
+            // Determine exercice IDs (combine singular exerciceId for legacy and exerciceIds for new multiple)
+            // Determine exercice IDs
+            let ids: number[] = [];
+            if (Array.isArray(question.exerciceIds)) {
+                ids = question.exerciceIds.map(id => parseInt(id));
+            } else if (question.exerciceId) {
+                ids = [parseInt(question.exerciceId)];
+            }
+
+            const dto: Partial<QuestionDTO> = {
+                enonce: question.enonce,
+                typeQuestion: question.typeQuestion,
+                propositions: question.propositions || [],
+                reponsesCorrectes: question.reponsesCorrectes || [],
+                exerciceIds: ids
+            };
+
+            // Choose endpoint based on presence of associations
+            const url = (ids.length > 0) ? `${this.apiUrl}/exercice` : this.apiUrl;
+
+            const saved = await firstValueFrom(this.http.post<QuestionDTO>(url, dto));
             const mapped = this.mapToQuestion(saved);
             this.questions.update((qs) => [mapped, ...qs]);
+            return mapped;
         } catch (err) {
             console.error('Error adding question', err);
             throw err;
@@ -81,18 +98,27 @@ export class QuestionService {
     }
 
     async updateQuestion(updatedQ: Question) {
-        const dto = {
+        // Ensure we collect all associated IDs
+        let ids: number[] = [];
+        if (Array.isArray(updatedQ.exerciceIds)) {
+            ids = updatedQ.exerciceIds.map(id => parseInt(id));
+        } else if (updatedQ.exerciceId) {
+            ids = [parseInt(updatedQ.exerciceId)];
+        }
+
+        const dto: Partial<QuestionDTO> = {
             enonce: updatedQ.enonce,
             typeQuestion: updatedQ.typeQuestion,
             propositions: updatedQ.propositions,
             reponsesCorrectes: updatedQ.reponsesCorrectes,
-            exerciceId: parseInt(updatedQ.exerciceId)
+            exerciceIds: ids
         };
 
         try {
             const saved = await firstValueFrom(this.http.put<QuestionDTO>(`${this.apiUrl}/${updatedQ.id}`, dto));
             const mapped = this.mapToQuestion(saved);
             this.questions.update((qs) => qs.map(q => q.id === mapped.id ? mapped : q));
+            return mapped;
         } catch (err) {
             console.error('Error updating question', err);
             throw err;
@@ -105,6 +131,20 @@ export class QuestionService {
             this.questions.update((qs) => qs.filter(q => q.id !== id));
         } catch (err) {
             console.error('Error deleting question', err);
+            throw err;
+        }
+    }
+
+    async deleteMultiple(ids: string[]) {
+        const numericIds = ids.map(id => parseInt(id));
+        try {
+            await firstValueFrom(this.http.request('delete', `${this.apiUrl}/delete-multiple`, {
+                body: numericIds,
+                responseType: 'text'
+            }));
+            this.questions.update((qs) => qs.filter(q => !ids.includes(q.id)));
+        } catch (err) {
+            console.error('Error deleting multiple questions', err);
             throw err;
         }
     }

@@ -1,5 +1,5 @@
 import { Component, OnInit, signal, ViewChild, Signal } from '@angular/core';
-import { ConfirmationService, MessageService } from 'primeng/api';
+import { ConfirmationService, MessageService, FilterService } from 'primeng/api';
 import { TestCandidatePreviewComponent } from './test-candidate-preview.component';
 import { Table, TableModule } from 'primeng/table';
 import { CommonModule } from '@angular/common';
@@ -25,6 +25,7 @@ import { InternshipService, InternshipOffer } from '@/app/services/internship.se
 import { ExerciceService, Exercice } from '@/app/services/exercice.service';
 import { QuestionService, Question } from '@/app/services/question.service';
 import { TooltipModule } from 'primeng/tooltip';
+import { MultiSelectModule } from 'primeng/multiselect';
 
 interface QuestionPrep {
     tempId: string;
@@ -44,16 +45,18 @@ interface ExercicePrep {
     existingExerciceId?: string;
     questions: QuestionPrep[];
     expanded?: boolean;
+    removedQuestionIds?: string[]; // Track detached questions
 }
 
 @Component({
     selector: 'app-test-management',
     standalone: true,
     imports: [
-        CommonModule, TableModule, FormsModule, ButtonModule, RippleModule,
+        CommonModule, FormsModule, TableModule, ButtonModule, RippleModule,
+        IconFieldModule, InputIconModule, MultiSelectModule,
         ToastModule, ToolbarModule, InputTextModule, DialogModule, SelectModule,
-        TextareaModule, InputNumberModule, ConfirmDialogModule, IconFieldModule,
-        InputIconModule, TagModule, CheckboxModule, RadioButtonModule, DividerModule, TooltipModule,
+        TextareaModule, InputNumberModule, ConfirmDialogModule,
+        TagModule, CheckboxModule, RadioButtonModule, DividerModule, TooltipModule,
         TestCandidatePreviewComponent
     ],
     template: `
@@ -68,7 +71,7 @@ interface ExercicePrep {
         </p-toolbar>
 
         <p-table #dt [value]="tests()" [rows]="10" [paginator]="true"
-            [globalFilterFields]="['titre','description','offerId']"
+            [globalFilterFields]="['titre','description','offerIds']"
             [tableStyle]="{'min-width':'75rem'}" [(selection)]="selectedTests"
             [rowHover]="true" dataKey="id"
             currentPageReportTemplate="Affichage de {first} à {last} sur {totalRecords} tests"
@@ -77,11 +80,11 @@ interface ExercicePrep {
                 <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                     <h5 class="m-0 text-2xl font-bold">Gestion des Tests Techniques</h5>
                     <div class="flex flex-col md:flex-row gap-2">
-                        <p-select [options]="offers()" optionLabel="title" optionValue="id" [showClear]="true" placeholder="Filtrer par offre" (onChange)="onOfferFilter(dt,$event)" class="w-full md:w-64" />
-                        <p-iconfield>
-                            <p-inputicon styleClass="pi pi-search" />
+                        <p-multiSelect [options]="offers()" optionLabel="title" optionValue="id" [showClear]="true" placeholder="Filtrer par offre" (onChange)="onOfferFilter(dt,$event)" class="w-full md:w-64" display="chip" />
+                        <p-iconField>
+                            <p-inputIcon styleClass="pi pi-search" />
                             <input pInputText type="text" (input)="onGlobalFilter(dt,$event)" placeholder="Rechercher..." />
-                        </p-iconfield>
+                        </p-iconField>
                     </div>
                 </div>
             </ng-template>
@@ -89,7 +92,7 @@ interface ExercicePrep {
                 <tr>
                     <th style="width:3rem"><p-tableHeaderCheckbox /></th>
                     <th pSortableColumn="titre">Titre <p-sortIcon field="titre" /></th>
-                    <th pSortableColumn="offerId">Offre associée <p-sortIcon field="offerId" /></th>
+                    <th pSortableColumn="offerIds">Offres associées <p-sortIcon field="offerIds" /></th>
                     <th pSortableColumn="dureeMinutes">Durée (min) <p-sortIcon field="dureeMinutes" /></th>
                     <th style="min-width:8rem">Exercices</th>
                     <th style="min-width:10rem">Actions</th>
@@ -99,7 +102,12 @@ interface ExercicePrep {
                 <tr>
                     <td><p-tableCheckbox [value]="test" /></td>
                     <td class="font-semibold">{{ test.titre }}</td>
-                    <td>{{ getOfferName(test.offerId) }}</td>
+                    <td>
+                        <div class="flex flex-wrap gap-1">
+                            <p-tag *ngFor="let id of test.offerIds || []" [value]="getOneOfferName(id)" severity="secondary" styleClass="text-[10px] font-bold" />
+                            <span *ngIf="!(test.offerIds?.length)" class="text-xs text-slate-300 italic">Aucune</span>
+                        </div>
+                    </td>
                     <td>{{ test.dureeMinutes }} min</td>
                     <td>
                         <div class="flex items-center gap-2">
@@ -150,23 +158,23 @@ interface ExercicePrep {
                 <div *ngIf="wizardStep===1" class="flex flex-col gap-4">
                     <div>
                         <label class="block font-bold mb-2">Titre du test</label>
-                        <input type="text" pInputText [(ngModel)]="test.titre" autofocus placeholder="Ex : Test Angular Fondamentaux" [fluid]="true" />
+                        <input type="text" pInputText [(ngModel)]="test.titre" autofocus placeholder="Ex : Test Angular Fondamentaux" class="w-full" />
                         <small class="text-red-500" *ngIf="submitted&&!test.titre">Le titre est requis.</small>
                     </div>
                     <div>
                         <label class="block font-bold mb-2">Description</label>
-                        <textarea pTextarea [(ngModel)]="test.description" rows="3" placeholder="Description du contenu du test" [fluid]="true"></textarea>
+                        <textarea pTextarea [(ngModel)]="test.description" rows="3" placeholder="Description du contenu du test" class="w-full"></textarea>
                         <small class="text-red-500" *ngIf="submitted&&!test.description">La description est requise.</small>
                     </div>
                     <div class="flex gap-4">
                         <div class="flex-1">
                             <label class="block font-bold mb-2">Durée (minutes)</label>
-                            <p-inputnumber [(ngModel)]="test.dureeMinutes" [min]="5" [max]="240" [showButtons]="true" [fluid]="true" placeholder="60" />
+                            <p-inputnumber [(ngModel)]="test.dureeMinutes" [min]="5" [max]="240" [showButtons]="true" placeholder="60" class="w-full" />
                         </div>
                         <div class="flex-1">
-                            <label class="block font-bold mb-2">Offre de stage</label>
-                            <p-select [(ngModel)]="test.offerId" [options]="offers()" optionLabel="title" optionValue="id" placeholder="Choisir une offre" [fluid]="true" appendTo="body" />
-                            <small class="text-red-500" *ngIf="submitted&&!test.offerId">L'offre est requise.</small>
+                            <label class="block font-bold mb-2">Offres de stage</label>
+                            <p-multiselect [(ngModel)]="test.offerIds" [options]="offers()" optionLabel="title" optionValue="id" placeholder="Choisir une ou plusieurs offres" appendTo="body" display="chip" class="w-full" />
+                            <small class="text-blue-500 italic mt-1 block" *ngIf="!(test.offerIds?.length)">Sélectionnez les offres auxquelles ce test sera rattaché.</small>
                         </div>
                     </div>
                 </div>
@@ -207,6 +215,9 @@ interface ExercicePrep {
                                     {{ ex.questions.length }} question(s)
                                 </div>
                             </div>
+                            <p-button icon="pi pi-pencil" [text]="true" [rounded]="true" size="small"
+                                pTooltip="Modifier" tooltipPosition="left"
+                                (click)="$event.stopPropagation(); openEditExerciceDialog(exIdx)" />
                             <p-button icon="pi pi-trash" severity="danger" [text]="true" [rounded]="true" size="small"
                                 pTooltip="Supprimer" tooltipPosition="left"
                                 (click)="$event.stopPropagation(); removeExercice(exIdx)" />
@@ -246,8 +257,12 @@ interface ExercicePrep {
                                         <span class="text-xs text-green-700 font-semibold">{{ getQCorrectAnswer(q) }}</span>
                                     </div>
                                 </div>
-                                <p-button icon="pi pi-trash" severity="danger" [text]="true" [rounded]="true" size="small"
-                                    (click)="removeQuestion(exIdx,qIdx)" />
+                                <div class="flex items-center gap-1">
+                                    <p-button icon="pi pi-pencil" [text]="true" [rounded]="true" size="small"
+                                        (click)="openEditQuestionDialog(exIdx, qIdx)" />
+                                    <p-button icon="pi pi-trash" severity="danger" [text]="true" [rounded]="true" size="small"
+                                        (click)="removeQuestion(exIdx, qIdx)" />
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -275,10 +290,10 @@ interface ExercicePrep {
         <!-- SUB-DIALOG: Ajouter un Exercice          -->
         <!-- ══════════════════════════════════════════ -->
         <p-dialog [(visible)]="addExerciceDialog" [style]="{'width':'540px'}"
-            header="Ajouter un exercice" [modal]="true" class="p-fluid">
+            [header]="isEditingEx ? 'Modifier l’exercice' : 'Ajouter un exercice'" [modal]="true" class="p-fluid">
             <ng-template #content>
                 <div class="flex flex-col gap-5 pt-2">
-                    <div>
+                    <div *ngIf="!isEditingEx">
                         <label class="block font-bold mb-3">Mode d'ajout</label>
                         <div class="flex gap-3">
                             <div class="flex-1 p-4 rounded-xl border-2 cursor-pointer transition-all"
@@ -305,14 +320,14 @@ interface ExercicePrep {
                             </div>
                         </div>
                     </div>
-                    <div *ngIf="exMode==='new'">
-                        <label class="block font-bold mb-2">Titre de l'exercice</label>
+                    <div *ngIf="exMode==='new' || isEditingEx">
+                        <label class="block font-bold mb-2">{{ isEditingEx ? "Nom de l'exercice" : "Titre de l'exercice" }}</label>
                         <input type="text" pInputText [(ngModel)]="exTitre" placeholder="Ex : Composants Angular" [fluid]="true" />
                         <small class="text-red-500" *ngIf="submittedEx&&!exTitre.trim()">Le titre est requis.</small>
                     </div>
-                    <div *ngIf="exMode==='existing'">
+                    <div *ngIf="exMode==='existing' && !isEditingEx">
                         <label class="block font-bold mb-2">Choisir un exercice existant</label>
-                        <p-select [(ngModel)]="exExistingId" [options]="exercices()" optionLabel="titre" optionValue="id"
+                        <p-select [(ngModel)]="exExistingId" [options]="getAvailableExercices()" optionLabel="titre" optionValue="id"
                             placeholder="Sélectionner un exercice" [fluid]="true" appendTo="body" [filter]="true" filterBy="titre" />
                         <small class="text-red-500" *ngIf="submittedEx&&!exExistingId">Veuillez sélectionner un exercice.</small>
                     </div>
@@ -320,7 +335,7 @@ interface ExercicePrep {
             </ng-template>
             <ng-template #footer>
                 <p-button label="Annuler" icon="pi pi-times" [text]="true" (click)="addExerciceDialog=false" />
-                <p-button label="Ajouter à ce test" icon="pi pi-check"
+                <p-button [label]="isEditingEx ? 'Modifier l’exercice' : 'Ajouter à ce test'" icon="pi pi-check"
                     [style]="{'background-color':'#063970','border-color':'#063970'}"
                     (click)="confirmAddExercice()" />
             </ng-template>
@@ -330,10 +345,10 @@ interface ExercicePrep {
         <!-- SUB-DIALOG: Ajouter une Question         -->
         <!-- ══════════════════════════════════════════ -->
         <p-dialog [(visible)]="addQuestionDialog" [style]="{'width':'640px'}"
-            header="Ajouter une question" [modal]="true" class="p-fluid">
+            [header]="isEditingQ ? 'Modifier la question' : 'Ajouter une question'" [modal]="true" class="p-fluid">
             <ng-template #content>
                 <div class="flex flex-col gap-5 pt-2">
-                    <div>
+                    <div *ngIf="!isEditingQ">
                         <label class="block font-bold mb-3">Mode d'ajout</label>
                         <div class="flex gap-3">
                             <div class="flex-1 p-4 rounded-xl border-2 cursor-pointer transition-all"
@@ -361,8 +376,8 @@ interface ExercicePrep {
                         </div>
                     </div>
 
-                    <!-- Nouvelle question -->
-                    <div *ngIf="qMode==='new'" class="flex flex-col gap-4">
+                    <!-- Formulaire (Nouveau ou Modification) -->
+                    <div *ngIf="qMode==='new' || isEditingQ" class="flex flex-col gap-4">
                         <div>
                             <label class="block font-bold mb-2">Énoncé</label>
                             <input type="text" pInputText [(ngModel)]="qEnonce" placeholder="Poser la question..." [fluid]="true" />
@@ -394,20 +409,20 @@ interface ExercicePrep {
                         <div *ngIf="qType==='TRUE_FALSE'">
                             <label class="block font-bold mb-2">Réponse correcte</label>
                             <p-select [options]="trueFalseOpts" [(ngModel)]="qTrueFalse" optionLabel="label" optionValue="value"
-                                placeholder="Choisir" [fluid]="true" appendTo="body" />
+                                placeholder="Choisir" appendTo="body" class="w-full" />
                         </div>
                         <!-- QUESTION_REPONSE -->
                         <div *ngIf="qType==='QUESTION_REPONSE'">
                             <label class="block font-bold mb-2">Réponse correcte attendue</label>
-                            <textarea pTextarea [(ngModel)]="qReponseLibre" rows="3" placeholder="Tapez la réponse attendue..." [fluid]="true"></textarea>
+                            <textarea pTextarea [(ngModel)]="qReponseLibre" rows="3" placeholder="Tapez la réponse attendue..." class="w-full"></textarea>
                         </div>
                     </div>
 
-                    <!-- Question existante -->
-                    <div *ngIf="qMode==='existing'" class="w-full">
+                    <!-- Question existante (uniquement en mode ajout) -->
+                    <div *ngIf="qMode==='existing' && !isEditingQ" class="w-full">
                         <label class="block font-bold text-slate-800 mb-2">Choisir une question existante</label>
-                        <p-select [(ngModel)]="qExistingId" [options]="questions()" optionLabel="enonce" optionValue="id"
-                            placeholder="Sélectionner une question" [fluid]="true" appendTo="body" [filter]="true" filterBy="enonce">
+                        <p-select [(ngModel)]="qExistingId" [options]="getAvailableQuestions()" optionLabel="enonce" optionValue="id"
+                            placeholder="Sélectionner une question" class="w-full" appendTo="body" [filter]="true" filterBy="enonce">
                             <ng-template #item let-q>
                                 <div class="flex items-center gap-2">
                                     <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 uppercase">{{ q.typeQuestion }}</span>
@@ -446,7 +461,7 @@ interface ExercicePrep {
             </ng-template>
             <ng-template #footer>
                 <p-button label="Annuler" icon="pi pi-times" [text]="true" (click)="addQuestionDialog=false" />
-                <p-button label="Ajouter à l'exercice" icon="pi pi-check"
+                <p-button [label]="isEditingQ ? 'Modifier ce question' : 'Ajouter à l’exercice'" icon="pi pi-check"
                     [style]="{'background-color':'#063970','border-color':'#063970'}"
                     (click)="confirmAddQuestion()" />
             </ng-template>
@@ -492,8 +507,8 @@ interface ExercicePrep {
                     </div>
                     <div *ngIf="quickExMode==='existing'">
                         <label class="block font-bold mb-2">Choisir un exercice existant</label>
-                        <p-select [(ngModel)]="quickExExistingId" [options]="exercices()" optionLabel="titre" optionValue="id"
-                            placeholder="Sélectionner un exercice" [fluid]="true" appendTo="body" [filter]="true" filterBy="titre"
+                        <p-select [(ngModel)]="quickExExistingId" [options]="getAvailableExercices()" optionLabel="titre" optionValue="id"
+                            placeholder="Sélectionner un exercice" class="w-full" appendTo="body" [filter]="true" filterBy="titre"
                             (onChange)="onQuickExChange()" />
                     </div>
 
@@ -552,8 +567,12 @@ interface ExercicePrep {
             <div class="flex flex-col gap-4">
                 <div><span class="block font-bold mb-1 text-gray-500 text-sm uppercase">Titre</span>
                     <div class="text-lg font-semibold">{{ test.titre }}</div></div>
-                <div><span class="block font-bold mb-1 text-gray-500 text-sm uppercase">Offre associée</span>
-                    <div class="text-blue-700 font-medium">{{ getOfferName(test.offerId!) }}</div></div>
+                <div><span class="block font-bold mb-1 text-gray-500 text-sm uppercase">Offres associées</span>
+                    <div class="flex flex-wrap gap-2">
+                        <p-tag *ngFor="let id of test.offerIds || []" [value]="getOneOfferName(id)" severity="info" />
+                        <span *ngIf="!(test.offerIds?.length)" class="italic text-slate-400">Aucune</span>
+                    </div>
+                </div>
                 <div><span class="block font-bold mb-1 text-gray-500 text-sm uppercase">Durée</span>
                     <div>{{ test.dureeMinutes }} minutes</div></div>
                 <div><span class="block font-bold mb-1 text-gray-500 text-sm uppercase">Description</span>
@@ -565,72 +584,107 @@ interface ExercicePrep {
         </p-dialog>
 
         <!-- Vue Exercices & Questions -->
-        <p-dialog [(visible)]="viewExercicesDialog" [style]="{'width':'850px'}"
-            [header]="'Exercices & Questions – '+selectedTestForExercice?.titre" [modal]="true">
-            <p-table [value]="associatedExercices" [tableStyle]="{ 'min-width': '100%' }" class="p-fluid" dataKey="id">
-                <ng-template #header>
-                    <tr>
-                        <th style="width:3rem"></th>
-                        <th>Titre de l'exercice</th>
-                        <th style="width:8rem" class="text-center">Questions</th>
-                    </tr>
-                </ng-template>
-                <ng-template #body let-ex>
-                    <tr class="cursor-pointer hover:bg-gray-50" (click)="ex._expanded=!ex._expanded">
-                        <td>
-                            <p-button type="button" pRipple [text]="true" [rounded]="true" [plain]="true"
-                                [icon]="ex._expanded?'pi pi-chevron-down':'pi pi-chevron-right'"
-                                (click)="$event.stopPropagation();ex._expanded=!ex._expanded" />
-                        </td>
-                        <td class="font-bold p-3">{{ ex.titre }}</td>
-                        <td class="text-center p-3">
-                            <div class="flex items-center justify-center gap-2">
-                                <p-tag [value]="ex.questions?.length||0" severity="info" class="cursor-pointer" (click)="$event.stopPropagation();ex._expanded=!ex._expanded" />
-                                <p-button icon="pi pi-plus" [text]="true" [rounded]="true" size="small" [style]="{'color':'#063970'}" 
-                                          pTooltip="Ajouter une question" tooltipPosition="top"
-                                          (click)="$event.stopPropagation(); openAddDirectQuestionDialog(ex.id)" />
+        <p-dialog [(visible)]="viewExercicesDialog" [style]="{'width':'900px', 'max-width':'95vw'}"
+            [header]="'Exercices & Questions – '+selectedTestForExercice?.titre" [modal]="true" [draggable]="false">
+            
+            <div class="flex flex-col gap-4 mt-2">
+                <!-- Info Header -->
+                <div class="p-4 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-between">
+                    <div>
+                        <h6 class="m-0 font-bold text-blue-900">Structure du Test</h6>
+                        <p class="text-xs text-blue-600 m-0 mt-1">Gérez les exercices et questions associés à ce test en temps réel.</p>
+                    </div>
+                    <p-button label="Ajouter un exercice" icon="pi pi-plus" size="small"
+                        [style]="{'background-color':'#063970','border-color':'#063970'}"
+                        (click)="openQuickAddExercice(selectedTestForExercice!)" />
+                </div>
+
+                <!-- Empty State -->
+                <div *ngIf="associatedExercices.length === 0" 
+                    class="text-center py-12 rounded-xl border-2 border-dashed border-gray-200 bg-gray-50">
+                    <i class="pi pi-inbox text-4xl text-gray-300 mb-3"></i>
+                    <div class="text-gray-500 font-medium">Aucun exercice associé.</div>
+                </div>
+
+                <!-- Exercise Cards -->
+                <div *ngFor="let ex of associatedExercices; let exIdx=index" 
+                    class="rounded-xl border border-gray-200 overflow-hidden shadow-sm bg-white">
+                    
+                    <!-- Exercise Header -->
+                    <div class="flex items-center gap-3 p-4 cursor-pointer select-none"
+                        [style.background]="ex._expanded ? 'linear-gradient(to right,#f0f7ff,#fff)' : 'linear-gradient(to right,#fafbfc,#fff)'"
+                        (click)="ex._expanded = !ex._expanded">
+                        <div class="flex items-center justify-center w-8 h-8 rounded-full text-white text-sm font-bold shrink-0"
+                            style="background:#063970">{{ exIdx + 1 }}</div>
+                        <div class="flex-1 min-w-0">
+                            <div class="font-bold text-gray-800">{{ ex.titre }}</div>
+                            <div class="text-[10px] font-bold text-blue-500 uppercase tracking-wider mt-0.5">
+                                {{ ex.questions?.length || 0 }} Questions
                             </div>
-                        </td>
-                    </tr>
-                    <tr *ngIf="ex._expanded">
-                        <td colspan="3" style="padding:0">
-                            <div class="p-4 bg-gray-50 border-l-4 border-blue-400 ml-4 mr-2 mb-2 rounded-r-lg">
-                                <div class="flex items-center justify-between mb-3 mt-1">
-                                    <h6 class="m-0 font-semibold text-gray-700">Questions de "{{ ex.titre }}"</h6>
-                                    <p-button label="Ajouter une question" icon="pi pi-plus" [text]="true" size="small"
-                                        [style]="{'color':'#063970'}" (click)="openAddDirectQuestionDialog(ex.id)" />
-                                </div>
-                                <div *ngIf="ex.questions&&ex.questions.length>0; else noQ">
-                                    <div *ngFor="let q of ex.questions; let i=index"
-                                        class="flex items-start gap-3 py-2 border-b border-gray-200 last:border-0">
-                                        <span class="text-xs text-gray-400 font-mono mt-1 w-4">{{ i+1 }}.</span>
-                                        <p-tag [value]="q.typeQuestion" severity="secondary" class="shrink-0 mt-0.5" />
-                                        <div class="flex-1 min-w-0">
-                                            <div class="font-medium text-gray-800">{{ q.enonce }}</div>
-                                            <!-- Propositions (Existing View) -->
-                                            <div *ngIf="q.propositions && q.propositions.length > 0" class="mt-1 text-xs text-xs text-gray-500 italic">
-                                                <span *ngFor="let p of q.propositions; let last = last">
-                                                    {{ p }}<span *ngIf="!last"> · </span>
-                                                </span>
-                                            </div>
-                                            <!-- Réponse Correcte (Existing View) -->
-                                            <div class="mt-1 text-sm font-bold text-green-700">
-                                                ✓ {{ (q.reponsesCorrectes || []).join(' · ') }}
-                                            </div>
+                        </div>
+                        <div class="flex items-center gap-1">
+                            <p-button icon="pi pi-pencil" [text]="true" [rounded]="true" size="small"
+                                pTooltip="Modifier l’exercice" tooltipPosition="top"
+                                (click)="$event.stopPropagation(); openEditExerciceDirect(ex)" />
+                            <p-button icon="pi pi-trash" severity="danger" [text]="true" [rounded]="true" size="small"
+                                pTooltip="Détacher du test" tooltipPosition="top"
+                                (click)="$event.stopPropagation(); detachExerciceFromTest(ex)" />
+                            <i [class]="ex._expanded ? 'pi pi-chevron-down ml-2 text-gray-400' : 'pi pi-chevron-right ml-2 text-gray-400'"></i>
+                        </div>
+                    </div>
+
+                    <!-- Questions Panel -->
+                    <div *ngIf="ex._expanded" class="border-t border-gray-100 p-4 bg-gray-50">
+                        <div class="flex items-center justify-between mb-3 px-2">
+                            <span class="text-xs font-black text-gray-400 uppercase tracking-widest">
+                                <i class="pi pi-question-circle mr-1 text-blue-500"></i>Contenu de l'exercice
+                            </span>
+                            <p-button label="Nouvelle question" icon="pi pi-plus" [text]="true" size="small"
+                                [style]="{'color':'#063970','font-size':'11px','font-weight':'bold'}" (click)="openAddDirectQuestionDialog(ex.id)" />
+                        </div>
+
+                        <div class="flex flex-col gap-2">
+                            <div *ngFor="let q of ex.questions; let qIdx=index" 
+                                class="flex items-start gap-3 p-3 bg-white rounded-lg border border-gray-100 group hover:border-blue-200 transition-colors">
+                                <span class="text-[10px] font-mono text-gray-400 mt-1.5 w-4">{{ qIdx + 1 }}.</span>
+                                <div class="flex-1 min-w-0">
+                                    <div class="flex items-center gap-2 mb-1">
+                                        <p-tag [value]="q.typeQuestion" [severity]="q.typeQuestion==='QCU'?'info':'secondary'" styleClass="text-[9px] font-black" />
+                                    </div>
+                                    <div class="text-sm font-semibold text-gray-800">{{ q.enonce }}</div>
+                                    
+                                    <!-- Options View -->
+                                    <div *ngIf="q.propositions?.length" class="mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
+                                        <div *ngFor="let p of q.propositions" class="flex items-center gap-1.5">
+                                            <i class="pi pi-circle-fill text-[6px] text-gray-300"></i>
+                                            <span class="text-[11px] text-gray-500">{{ p }}</span>
                                         </div>
                                     </div>
+
+                                    <!-- Correct Answer -->
+                                    <div class="mt-1.5 flex items-center gap-1.5">
+                                        <i class="pi pi-check-circle text-green-500 text-xs"></i>
+                                        <span class="text-[11px] font-bold text-green-600">
+                                            {{ (q.reponsesCorrectes || []).join(' · ') }}
+                                        </span>
+                                    </div>
                                 </div>
-                                <ng-template #noQ>
-                                    <div class="text-gray-400 italic py-2 text-sm">Aucune question dans cet exercice.</div>
-                                </ng-template>
+                                <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <p-button icon="pi pi-pencil" [text]="true" [rounded]="true" size="small"
+                                        (click)="openEditQuestionDirect(ex, q)" />
+                                    <p-button icon="pi pi-trash" severity="danger" [text]="true" [rounded]="true" size="small"
+                                        (click)="detachQuestionFromExercice(ex, q)" />
+                                </div>
                             </div>
-                        </td>
-                    </tr>
-                </ng-template>
-                <ng-template #empty>
-                    <tr><td colspan="3" class="text-center p-4 text-gray-400">Aucun exercice associé à ce test.</td></tr>
-                </ng-template>
-            </p-table>
+
+                            <div *ngIf="!ex.questions || ex.questions.length === 0" 
+                                class="text-center py-4 text-gray-400 text-xs italic bg-white rounded-lg border border-dashed border-gray-200">
+                                Aucune question dans cet exercice.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
 
             <div class="mt-4 flex justify-center">
                 <p-button label="Ajouter un exercice" icon="pi pi-plus" [outlined]="true"
@@ -651,10 +705,10 @@ interface ExercicePrep {
             [test]="selectedTestForExercice" 
             (onClosePreview)="previewDialog = false" />
 
-        <p-confirmdialog [style]="{'width':'450px'}" />
+        <p-confirmDialog [style]="{'width':'450px'}" />
         <p-toast />
     `,
-    providers: [MessageService, ConfirmationService, ExerciceService, QuestionService]
+    providers: [MessageService, ConfirmationService]
 })
 export class TestManagement implements OnInit {
     // ─── Dialogs ───────────────────────────────────────
@@ -665,6 +719,8 @@ export class TestManagement implements OnInit {
     previewDialog = false; // New preview state
     addExerciceDialog = false;
     addQuestionDialog = false;
+    removedExerciceIds: string[] = []; // Track exercises removed during wizard update
+    removedQuestionIds: { [exTempId: string]: string[] } = {}; // Track questions removed per exercise prep
 
     // ─── Data signals ──────────────────────────────────
     tests: Signal<TechnicalTest[]>;
@@ -696,6 +752,9 @@ export class TestManagement implements OnInit {
     props: { text: string; isCorrect: boolean }[] = [];
     submittedQ = false;
     targetExIdx = -1;
+    targetQIdx = -1; // To track if we're editing an existing question in prep
+    isEditingQ = false;
+    isEditingEx = false;
 
     typeQuestions = [
         { label: 'Choix unique (QCU)', value: 'QCU' },
@@ -713,7 +772,7 @@ export class TestManagement implements OnInit {
     quickAddQuestions: QuestionPrep[] = [];
     isDirectViewAdd = false; // Flag to indicate adding from an existing view
     managedExerciseId: string | null = null; // To track existing exercise being added to
-    associatedExercices: (Exercice & { questions?: Question[] })[] = [];
+    associatedExercices: (Exercice & { questions?: Question[], _expanded?: boolean })[] = [];
 
     @ViewChild('dt') dt!: Table;
 
@@ -723,7 +782,8 @@ export class TestManagement implements OnInit {
         private exerciceService: ExerciceService,
         private questionService: QuestionService,
         private messageService: MessageService,
-        private confirmationService: ConfirmationService
+        private confirmationService: ConfirmationService,
+        private filterService: FilterService
     ) {
         this.tests = this.testService.getTests();
         this.offers = this.internshipService.getOffers();
@@ -731,67 +791,166 @@ export class TestManagement implements OnInit {
         this.questions = this.questionService.getQuestions();
     }
 
-    ngOnInit() { }
+    ngOnInit() {
+        this.filterService.register('offerIntersect', (value: any[], filter: any[]): boolean => {
+            if (filter === undefined || filter === null || filter.length === 0) {
+                return true;
+            }
+            if (value === undefined || value === null || !Array.isArray(value)) {
+                return false;
+            }
+            return value.some((v: any) => filter.includes(v));
+        });
+    }
 
     // ─── Helpers ───────────────────────────────────────
-    getOfferName(offerId: string): string {
+    getOneOfferName(offerId: string): string {
         return this.offers().find(o => o.id === offerId)?.title ?? 'N/A';
     }
+    
+    getOfferName(offerIds: string[]): string {
+        if (!offerIds?.length) return 'N/A';
+        return offerIds.map(id => this.getOneOfferName(id)).join(', ');
+    }
+    
+    getAvailableExercices(): Exercice[] {
+        let currentTestId: string | undefined;
+        let localExistingIds = new Set<string>();
+        let localRemovedIds = new Set<string>();
+
+        if (this.testWizardDialog) {
+            currentTestId = this.test.id;
+            this.exercicesPrep.forEach(ex => {
+                if (ex.mode === 'existing' && ex.existingExerciceId) {
+                    localExistingIds.add(ex.existingExerciceId);
+                }
+            });
+            (this.removedExerciceIds || []).forEach(id => localRemovedIds.add(id));
+        } else if (this.selectedTestForExercice) {
+            currentTestId = this.selectedTestForExercice.id;
+            const exs = this.exerciceService.getExercicesByTest(currentTestId);
+            exs.forEach(e => localExistingIds.add(e.id));
+        }
+
+        return this.exercices().filter(ex => {
+            if (localExistingIds.has(ex.id)) return false;
+            if (currentTestId && ex.testIds && ex.testIds.includes(currentTestId)) {
+                if (localRemovedIds.has(ex.id)) return true;
+                return false;
+            }
+            return true;
+        });
+    }
+
+    getAvailableQuestions(): Question[] {
+        let currentExId: string | undefined;
+        let localExistingIds = new Set<string>();
+        let localRemovedIds = new Set<string>();
+
+        if (this.targetExIdx >= 0 && this.exercicesPrep[this.targetExIdx]) {
+            const ex = this.exercicesPrep[this.targetExIdx];
+            currentExId = (ex.mode === 'existing') ? ex.existingExerciceId : undefined;
+            ex.questions.forEach(q => {
+                if (q.mode === 'existing' && q.existingQuestionId) localExistingIds.add(q.existingQuestionId);
+            });
+            (ex.removedQuestionIds || []).forEach(id => localRemovedIds.add(id));
+        } else if (this.exerciceDialog) {
+            if (this.quickExMode === 'existing' && this.quickExExistingId) {
+                currentExId = this.quickExExistingId;
+            }
+            this.quickAddQuestions.forEach(q => {
+                if (q.mode === 'existing' && q.existingQuestionId) localExistingIds.add(q.existingQuestionId);
+            });
+        } else if (this.managedExerciseId) {
+            currentExId = this.managedExerciseId;
+            const qs = this.questionService.getQuestionsByExercice(currentExId);
+            qs.forEach(q => localExistingIds.add(q.id));
+        }
+
+        return this.questions().filter(q => {
+            if (localExistingIds.has(q.id)) return false;
+            if (currentExId && q.exerciceIds && q.exerciceIds.includes(currentExId)) {
+                if (localRemovedIds.has(q.id)) return true;
+                return false;
+            }
+            return true;
+        });
+    }
+    
     getQuestionById(id: string): Question | undefined {
         return this.questions().find(q => q.id === id);
     }
 
     // Retourne la réponse correcte d'une question en préparation (pour l'affichage step 2)
     getQCorrectAnswer(q: QuestionPrep): string {
-        if (q.mode === 'new') {
-            const type = q.typeQuestion;
-            if (type === 'QCU' || type === 'QCM') {
-                const corrects = (q.propositions || []).filter(p => p.isCorrect).map(p => p.text).filter(t => t.trim());
-                return corrects.length ? corrects.join(' · ') : '';
-            } else if (type === 'TRUE_FALSE') {
-                return q.selectedTrueFalse || '';
-            } else if (type === 'QUESTION_REPONSE') {
-                return q.reponseLibre ? q.reponseLibre.substring(0, 80) + (q.reponseLibre.length > 80 ? '…' : '') : '';
-            }
-        } else {
+        if (q.mode === 'existing' && !q.enonce) {
             const eq = this.getQuestionById(q.existingQuestionId!);
             if (eq) return (eq.reponsesCorrectes || []).join(' · ');
+        }
+
+        const type = q.typeQuestion;
+        if (type === 'QCU' || type === 'QCM') {
+            const corrects = (q.propositions || []).filter(p => p.isCorrect).map(p => p.text).filter(t => t.trim());
+            if (corrects.length) return corrects.join(' · ');
+        } else if (type === 'TRUE_FALSE') {
+            if (q.selectedTrueFalse) return q.selectedTrueFalse;
+            return 'Vrai';
+        } else if (type === 'QUESTION_REPONSE') {
+            if (q.reponseLibre) return q.reponseLibre.substring(0, 80) + (q.reponseLibre.length > 80 ? '…' : '');
         }
         return '';
     }
 
     // Retourne les propositions d'une question en préparation (pour l'affichage step 2)
     getQPropositions(q: QuestionPrep): string[] {
-        if (q.mode === 'new') {
-            return (q.propositions || []).map(p => p.text).filter(t => t.trim() !== '');
-        } else {
+        if (q.mode === 'existing' && !q.enonce) {
             const eq = this.getQuestionById(q.existingQuestionId!);
             return eq ? (eq.propositions || []) : [];
         }
+
+        if (q.typeQuestion === 'TRUE_FALSE') return ['Vrai', 'Faux'];
+        if (q.typeQuestion === 'QUESTION_REPONSE') return [];
+
+        if (q.propositions && q.propositions.length > 0) {
+            return q.propositions.map(p => p.text).filter(t => t.trim() !== '');
+        }
+        return [];
     }
 
     getExLabel(ex: ExercicePrep): string {
         if (ex.mode === 'new') return ex.titre || '(sans titre)';
+        // Prioritize the title from prep if it was modified (for immediate feedback)
+        if (ex.titre) return ex.titre;
         return this.exercices().find(e => e.id === ex.existingExerciceId)?.titre ?? 'Exercice inconnu';
     }
+
     getQLabel(q: QuestionPrep): string {
-        if (q.mode === 'new') return q.enonce || '(sans énoncé)';
-        return this.getQuestionById(q.existingQuestionId!)?.enonce ?? 'Question inconnue';
+        if (q.mode === 'existing' && !q.enonce) {
+            return this.getQuestionById(q.existingQuestionId!)?.enonce ?? 'Question inconnue';
+        }
+        if (q.enonce) return q.enonce;
+        return '(sans énoncé)';
     }
+
     getQType(q: QuestionPrep): string {
-        if (q.mode === 'new') return q.typeQuestion ?? '';
-        return this.getQuestionById(q.existingQuestionId!)?.typeQuestion ?? '';
+        if (q.mode === 'existing' && !q.enonce) {
+            return this.getQuestionById(q.existingQuestionId!)?.typeQuestion ?? '';
+        }
+        if (q.typeQuestion) return q.typeQuestion;
+        return '';
     }
     onGlobalFilter(table: Table, event: Event) {
         table.filterGlobal((event.target as HTMLInputElement).value, 'contains');
     }
     onOfferFilter(table: Table, event: any) {
-        table.filter(event.value, 'offerId', 'equals');
+        table.filter(event.value, 'offerIds', 'offerIntersect');
     }
+    
+    // wizard-related logic simplified since multiselect binds directly to test.offerIds
 
     // ─── Open new wizard ───────────────────────────────
     openNew() {
-        this.test = { dureeMinutes: 60 };
+        this.test = { dureeMinutes: 60, offerIds: [] };
         this.submitted = false;
         this.wizardStep = 1;
         this.exercicesPrep = [];
@@ -801,12 +960,15 @@ export class TestManagement implements OnInit {
     // ─── Edit : charge exercices et questions existants ──
     editTest(test: TechnicalTest) {
         this.test = { ...test };
+        if (!this.test.offerIds) this.test.offerIds = [];
         this.submitted = false;
         this.wizardStep = 1;
+        this.removedExerciceIds = []; // Reset on edit start
+        this.removedQuestionIds = {};
 
         // Pré-charger les exercices existants du test
         const existingExercices = this.exerciceService.getExercicesByTest(test.id);
-        this.exercicesPrep = existingExercices.map(ex => {
+        this.exercicesPrep = existingExercices.map((ex: Exercice) => {
             const existingQs = this.questionService.getQuestionsByExercice(ex.id);
             return {
                 tempId: ex.id,
@@ -817,7 +979,8 @@ export class TestManagement implements OnInit {
                     mode: 'existing' as const,
                     existingQuestionId: q.id
                 })),
-                expanded: false
+                expanded: false,
+                removedQuestionIds: []
             };
         });
 
@@ -832,7 +995,8 @@ export class TestManagement implements OnInit {
     // ─── Wizard navigation ─────────────────────────────
     nextStep() {
         this.submitted = true;
-        if (this.test.titre?.trim() && this.test.description?.trim() && this.test.offerId) {
+        // Offer is now optional
+        if (this.test.titre?.trim() && this.test.description?.trim()) {
             this.submitted = false;
             this.wizardStep = 2;
         }
@@ -841,7 +1005,8 @@ export class TestManagement implements OnInit {
     // ─── Save wizard (depuis étape 1 ou 2) ────────────
     async saveWizard() {
         this.submitted = true;
-        if (!this.test.titre?.trim() || !this.test.description?.trim() || !this.test.offerId) {
+        // Offer is optional now, only title and description are required
+        if (!this.test.titre?.trim() || !this.test.description?.trim()) {
             this.wizardStep = 1;
             return;
         }
@@ -856,13 +1021,14 @@ export class TestManagement implements OnInit {
                 testId = this.test.id;
                 this.messageService.add({ severity: 'success', summary: 'Succès', detail: 'Test mis à jour', life: 3000 });
             } else {
-                testId = await this.testService.addTest({
+                const savedTest = await this.testService.addTest({
                     titre: this.test.titre!,
                     description: this.test.description!,
                     dureeMinutes: this.test.dureeMinutes ?? 60,
-                    offerId: this.test.offerId!,
+                    offerIds: this.test.offerIds ?? [],
                     exerciceCount: totalExCount
                 });
+                testId = savedTest.id;
                 this.messageService.add({ severity: 'success', summary: 'Succès', detail: 'Test créé', life: 3000 });
             }
 
@@ -872,13 +1038,24 @@ export class TestManagement implements OnInit {
                 if (ex.mode === 'new') {
                     exerciceId = await this.exerciceService.addExercice({
                         titre: ex.titre!,
-                        testId,
+                        testIds: [testId],
                         questionCount: ex.questions.length
                     });
                 } else {
                     const existingEx = this.exercices().find(e => e.id === ex.existingExerciceId);
                     if (existingEx) {
-                        await this.exerciceService.updateExercice({ ...existingEx, testId });
+                        const currentTestIds = existingEx.testIds || (existingEx.testId ? [existingEx.testId] : []);
+                        const updatedTestIds = currentTestIds.includes(testId) ? currentTestIds : [...currentTestIds, testId];
+                        
+                        // Also update title if changed in prep
+                        const updatedTitle = ex.titre?.trim() || existingEx.titre;
+                        if (updatedTitle !== existingEx.titre || !currentTestIds.includes(testId)) {
+                            await this.exerciceService.updateExercice({ 
+                                ...existingEx, 
+                                titre: updatedTitle,
+                                testIds: updatedTestIds 
+                            });
+                        }
                         exerciceId = existingEx.id;
                     } else continue;
                 }
@@ -899,11 +1076,65 @@ export class TestManagement implements OnInit {
                     } else {
                         const existingQ = this.getQuestionById(q.existingQuestionId!);
                         if (existingQ) {
-                            await this.questionService.updateQuestion({ ...existingQ, exerciceId });
+                            const currentExIds = existingQ.exerciceIds || [];
+                            const updatedExIds = currentExIds.includes(exerciceId) ? currentExIds : [...currentExIds, exerciceId];
+                            
+                            // Map prep data to question fields if it was edited
+                            const updatedQ: any = { ...existingQ, exerciceIds: updatedExIds };
+                            if (q.enonce) {
+                                updatedQ.enonce = q.enonce;
+                                if (q.typeQuestion) updatedQ.typeQuestion = q.typeQuestion;
+                                
+                                if (q.typeQuestion === 'QCU' || q.typeQuestion === 'QCM') {
+                                    if (q.propositions) {
+                                        updatedQ.propositions = q.propositions.map((p: any) => p.text);
+                                        updatedQ.reponsesCorrectes = q.propositions.filter((p: any) => p.isCorrect).map((p: any) => p.text);
+                                    }
+                                } else if (q.typeQuestion === 'TRUE_FALSE') {
+                                    updatedQ.propositions = ['Vrai', 'Faux'];
+                                    if (q.selectedTrueFalse) updatedQ.reponsesCorrectes = [q.selectedTrueFalse];
+                                } else if (q.typeQuestion === 'QUESTION_REPONSE') {
+                                    updatedQ.propositions = [];
+                                    if (q.reponseLibre) updatedQ.reponsesCorrectes = [q.reponseLibre];
+                                }
+                            }
+
+                            await this.questionService.updateQuestion(updatedQ);
                         }
                     }
                 }
             }
+
+            // Handle detachments (those that were in the test but removed during wizard session)
+            for (const removedId of this.removedExerciceIds) {
+                const exToDetach = this.exercices().find(e => e.id === removedId);
+                if (exToDetach && testId) {
+                    const currentTestIds = exToDetach.testIds || (exToDetach.testId ? [exToDetach.testId] : []);
+                    const updatedTestIds = currentTestIds.filter(id => id !== testId);
+                    await this.exerciceService.updateExercice({ ...exToDetach, testIds: updatedTestIds });
+                }
+            }
+
+            // Handle Question detachments
+            for (const ex of this.exercicesPrep) {
+                if (ex.removedQuestionIds?.length) {
+                    const targetExId = (ex.mode === 'existing') ? ex.existingExerciceId : undefined;
+                    if (targetExId) {
+                        for (const qId of ex.removedQuestionIds) {
+                            const q = this.getQuestionById(qId);
+                            if (q) {
+                                const currentExIds = q.exerciceIds || [];
+                                const updatedExIds = currentExIds.filter(id => id !== targetExId);
+                                await this.questionService.updateQuestion({ ...q, exerciceIds: updatedExIds });
+                            }
+                        }
+                    }
+                }
+            }
+
+            this.testService.fetchTests();
+            this.exerciceService.fetchExercices();
+            this.questionService.fetchQuestions();
 
             this.testWizardDialog = false;
             this.test = {};
@@ -915,6 +1146,7 @@ export class TestManagement implements OnInit {
 
     // ─── Sub-dialog: Add Exercise ──────────────────────
     openAddExerciceDialog() {
+        this.isEditingEx = false;
         this.exMode = 'new';
         this.exTitre = '';
         this.exExistingId = null;
@@ -922,42 +1154,85 @@ export class TestManagement implements OnInit {
         this.addExerciceDialog = true;
     }
 
-    confirmAddExercice() {
+    openEditExerciceDialog(exIdx: number) {
+        const ex = this.exercicesPrep[exIdx];
+        this.isEditingEx = true;
+        this.targetExIdx = exIdx;
+        this.exMode = ex.mode;
+        if (ex.mode === 'new') {
+            this.exTitre = ex.titre || '';
+        } else {
+            const existing = this.exercices().find(e => e.id === ex.existingExerciceId);
+            this.exTitre = existing?.titre || ex.titre || '';
+        }
+        this.exExistingId = ex.mode === 'existing' ? (ex.existingExerciceId || null) : null;
+        this.submittedEx = false;
+        this.addExerciceDialog = true;
+    }
+
+    async confirmAddExercice() {
         this.submittedEx = true;
         if (this.exMode === 'new' && !this.exTitre.trim()) return;
         if (this.exMode === 'existing' && !this.exExistingId) return;
 
-        const newEx: ExercicePrep = {
-            tempId: Date.now().toString(),
-            mode: this.exMode,
-            titre: this.exMode === 'new' ? this.exTitre.trim() : undefined,
-            existingExerciceId: this.exMode === 'existing' ? this.exExistingId! : undefined,
-            questions: [],
-            expanded: true
-        };
+        if (this.isEditingEx && this.targetExIdx >= 0) {
+            const ex = this.exercicesPrep[this.targetExIdx];
+            ex.mode = this.exMode;
+            if (this.exMode === 'new') {
+                ex.titre = this.exTitre.trim();
+                ex.existingExerciceId = undefined;
+            } else {
+                ex.existingExerciceId = this.exExistingId!;
+                ex.titre = this.exTitre.trim(); // Allow renaming existing
+            }
+        } else if (this.isEditingEx && this.targetExIdx === -4) { // Direct View Exercise Rename
+            const ex = this.exercices().find(e => e.id === this.managedExerciseId);
+            if (ex) {
+                await this.exerciceService.updateExercice({ ...ex, titre: this.exTitre.trim() });
+                this.messageService.add({ severity: 'success', summary: 'Succès', detail: 'Exercice renommé' });
+                this.refreshCurrentView();
+                this.testService.fetchTests();
+            }
+        } else {
+            const newEx: ExercicePrep = {
+                tempId: Date.now().toString(),
+                mode: this.exMode,
+                titre: this.exMode === 'new' ? this.exTitre.trim() : undefined,
+                existingExerciceId: this.exMode === 'existing' ? this.exExistingId! : undefined,
+                questions: [],
+                expanded: true,
+                removedQuestionIds: []
+            };
 
-        // Si exercice existant, charger ses questions
-        if (this.exMode === 'existing' && this.exExistingId) {
-            const existingQs = this.questionService.getQuestionsByExercice(this.exExistingId);
-            newEx.questions = existingQs.map(q => ({
-                tempId: q.id,
-                mode: 'existing',
-                existingQuestionId: q.id
-            }));
+            if (this.exMode === 'existing' && this.exExistingId) {
+                const existingQs = this.questionService.getQuestionsByExercice(this.exExistingId);
+                newEx.questions = existingQs.map(q => ({
+                    tempId: q.id,
+                    mode: 'existing',
+                    existingQuestionId: q.id
+                }));
+            }
+
+            this.exercicesPrep.push(newEx);
         }
 
-        this.exercicesPrep.push(newEx);
         this.addExerciceDialog = false;
         this.submittedEx = false;
     }
 
     removeExercice(idx: number) {
+        const ex = this.exercicesPrep[idx];
+        if (ex.mode === 'existing' && ex.existingExerciceId) {
+            this.removedExerciceIds.push(ex.existingExerciceId);
+        }
         this.exercicesPrep.splice(idx, 1);
     }
 
     // ─── Sub-dialog: Add Question ──────────────────────
     openAddQuestionDialog(exIdx: number) {
+        this.isEditingQ = false;
         this.targetExIdx = exIdx;
+        this.targetQIdx = -1;
         this.qMode = 'new';
         this.qEnonce = '';
         this.qType = 'QCU';
@@ -969,7 +1244,45 @@ export class TestManagement implements OnInit {
         this.addQuestionDialog = true;
     }
 
-    confirmAddQuestion() {
+    openEditQuestionDialog(exIdx: number, qIdx: number) {
+        const q = this.exercicesPrep[exIdx].questions[qIdx];
+        this.isEditingQ = true;
+        this.targetExIdx = exIdx;
+        this.targetQIdx = qIdx;
+        this.qMode = q.mode;
+
+        if (q.mode === 'new') {
+            this.qEnonce = q.enonce || '';
+            this.qType = q.typeQuestion || 'QCU';
+            this.qTrueFalse = q.selectedTrueFalse || 'Vrai';
+            this.qReponseLibre = q.reponseLibre || '';
+            this.props = q.propositions ? [...q.propositions] : [{ text: '', isCorrect: false }, { text: '', isCorrect: false }];
+        } else {
+            this.qExistingId = q.existingQuestionId || null;
+            const eq = this.getQuestionById(this.qExistingId!);
+            if (eq) {
+                this.qEnonce = eq.enonce;
+                this.qType = eq.typeQuestion;
+                this.qTrueFalse = (eq.typeQuestion === 'TRUE_FALSE' && eq.reponsesCorrectes?.length) ? eq.reponsesCorrectes[0] : 'Vrai';
+                this.qReponseLibre = (eq.typeQuestion === 'QUESTION_REPONSE' && eq.reponsesCorrectes?.length) ? eq.reponsesCorrectes[0] : '';
+                
+                if (eq.typeQuestion === 'QCU' || eq.typeQuestion === 'QCM') {
+                    this.props = (eq.propositions || []).map(p => ({
+                        text: p,
+                        isCorrect: eq.reponsesCorrectes?.includes(p) || false
+                    }));
+                    if (this.props.length === 0) {
+                        this.props = [{ text: '', isCorrect: false }, { text: '', isCorrect: false }];
+                    }
+                }
+            }
+        }
+
+        this.submittedQ = false;
+        this.addQuestionDialog = true;
+    }
+
+    async confirmAddQuestion() {
         this.submittedQ = true;
         if (this.qMode === 'new') {
             if (!this.qEnonce.trim() || !this.qType) return;
@@ -977,47 +1290,99 @@ export class TestManagement implements OnInit {
             if (!this.qExistingId) return;
         }
 
-        const newQ: QuestionPrep = {
-            tempId: Date.now().toString(),
+        let tempId = Date.now().toString();
+        if (this.isEditingQ) {
+            if (this.targetExIdx >= 0) {
+                tempId = this.exercicesPrep[this.targetExIdx].questions[this.targetQIdx].tempId;
+            } else if (this.targetExIdx === -1 && this.quickAddQuestions[this.targetQIdx]) {
+                tempId = this.quickAddQuestions[this.targetQIdx].tempId;
+            } else if (this.targetExIdx === -5) {
+                tempId = this.qExistingId || tempId;
+            }
+        }
+
+        const data: QuestionPrep = {
+            tempId,
             mode: this.qMode,
             existingQuestionId: this.qMode === 'existing' ? this.qExistingId! : undefined,
-            enonce: this.qMode === 'new' ? this.qEnonce.trim() : undefined,
-            typeQuestion: this.qMode === 'new' ? (this.qType as any) : undefined,
-            propositions: this.qMode === 'new' ? [...this.props] : undefined,
-            selectedTrueFalse: this.qMode === 'new' ? this.qTrueFalse : undefined,
-            reponseLibre: this.qMode === 'new' ? this.qReponseLibre : undefined
+            enonce: this.qEnonce.trim(),
+            typeQuestion: this.qType as any,
+            propositions: [...this.props],
+            selectedTrueFalse: this.qTrueFalse,
+            reponseLibre: this.qReponseLibre
         };
 
-        if (this.targetExIdx === -1) {
-            this.quickAddQuestions.push(newQ);
-        } else if (this.targetExIdx === -2) { // Mode Direct Add (Existing View)
-            const exerciceId = this.managedExerciseId!;
-            if (newQ.mode === 'existing') {
-                const existingQ = this.getQuestionById(newQ.existingQuestionId!);
-                if (existingQ) {
-                    this.questionService.updateQuestion({ ...existingQ, exerciceId });
+        if (this.isEditingQ) {
+            if (this.targetExIdx >= 0) {
+                this.exercicesPrep[this.targetExIdx].questions[this.targetQIdx] = data;
+            } else if (this.targetExIdx === -1) {
+                this.quickAddQuestions[this.targetQIdx] = data;
+            } else if (this.targetExIdx === -5) { // Direct View Edit
+                const updatedQ: any = { 
+                    id: this.qExistingId!,
+                    enonce: data.enonce!, 
+                    typeQuestion: data.typeQuestion!,
+                    exerciceIds: this.getQuestionById(this.qExistingId!)?.exerciceIds || []
+                };
+                if (data.typeQuestion === 'QCU' || data.typeQuestion === 'QCM') {
+                    updatedQ.propositions = (data.propositions || []).map(p => p.text);
+                    updatedQ.reponsesCorrectes = (data.propositions || []).filter(p => p.isCorrect).map(p => p.text);
+                } else if (data.typeQuestion === 'TRUE_FALSE') {
+                    updatedQ.propositions = ['Vrai', 'Faux'];
+                    updatedQ.reponsesCorrectes = [data.selectedTrueFalse || 'Vrai'];
+                } else if (data.typeQuestion === 'QUESTION_REPONSE') {
+                    updatedQ.propositions = [];
+                    updatedQ.reponsesCorrectes = [data.reponseLibre || ''];
                 }
-            } else {
-                const enonce = newQ.enonce?.trim();
-                const type = newQ.typeQuestion;
-                if (!enonce || !type) return;
-                const persistsQ: any = { enonce: enonce, typeQuestion: type, exerciceId };
-                if (newQ.typeQuestion === 'QCU' || newQ.typeQuestion === 'QCM') {
-                    persistsQ.propositions = (newQ.propositions || []).map(p => p.text);
-                    persistsQ.reponsesCorrectes = (newQ.propositions || []).filter(p => p.isCorrect).map(p => p.text);
-                } else if (newQ.typeQuestion === 'TRUE_FALSE') {
-                    persistsQ.propositions = ['Vrai', 'Faux'];
-                    persistsQ.reponsesCorrectes = [newQ.selectedTrueFalse || 'Vrai'];
-                } else {
-                    persistsQ.propositions = [];
-                    persistsQ.reponsesCorrectes = [newQ.reponseLibre || ''];
-                }
-                this.questionService.addQuestion(persistsQ);
+                await this.questionService.updateQuestion(updatedQ);
+                this.messageService.add({ severity: 'success', summary: 'Succès', detail: 'Question modifiée' });
+                this.testService.fetchTests(); // Sync main table counts
+                this.refreshCurrentView();
             }
-            this.messageService.add({ severity: 'success', summary: 'Succès', detail: 'Question ajoutée avec succès', life: 3000 });
-            this.refreshCurrentView(); // Reload the exercices view
-        } else if (this.targetExIdx >= 0 && this.exercicesPrep[this.targetExIdx]) {
-            this.exercicesPrep[this.targetExIdx].questions.push(newQ);
+        } else {
+            if (this.targetExIdx === -1) {
+                this.quickAddQuestions.push(data);
+            } else if (this.targetExIdx === -2) { // Mode Direct Add (Existing View)
+                const exerciceId = this.managedExerciseId!;
+                if (data.mode === 'existing') {
+                    const existingQ = this.getQuestionById(data.existingQuestionId!);
+                    if (existingQ) {
+                        const currentExIds = existingQ.exerciceIds || [];
+                        if (!currentExIds.includes(exerciceId)) {
+                            await this.questionService.updateQuestion({ 
+                                ...existingQ, 
+                                exerciceIds: [...currentExIds, exerciceId] 
+                            });
+                        }
+                    }
+                } else {
+                    const enonce = data.enonce?.trim();
+                    const type = data.typeQuestion;
+                    if (!enonce || !type) return;
+                    // For new questions being added directly to an exercise
+                    const persistsQ: any = { 
+                        enonce: enonce, 
+                        typeQuestion: type, 
+                        exerciceIds: [exerciceId] 
+                    };
+                    if (data.typeQuestion === 'QCU' || data.typeQuestion === 'QCM') {
+                        persistsQ.propositions = (data.propositions || []).map(p => p.text);
+                        persistsQ.reponsesCorrectes = (data.propositions || []).filter(p => p.isCorrect).map(p => p.text);
+                    } else if (data.typeQuestion === 'TRUE_FALSE') {
+                        persistsQ.propositions = ['Vrai', 'Faux'];
+                        persistsQ.reponsesCorrectes = [data.selectedTrueFalse || 'Vrai'];
+                    } else {
+                        persistsQ.propositions = [];
+                        persistsQ.reponsesCorrectes = [data.reponseLibre || ''];
+                    }
+                    await this.questionService.addQuestion(persistsQ);
+                }
+                this.messageService.add({ severity: 'success', summary: 'Succès', detail: 'Question ajoutée avec succès', life: 3000 });
+                this.testService.fetchTests(); // Sync main table counts
+                this.refreshCurrentView(); // Reload the exercices view
+            } else if (this.targetExIdx >= 0 && this.exercicesPrep[this.targetExIdx]) {
+                this.exercicesPrep[this.targetExIdx].questions.push(data);
+            }
         }
 
         this.addQuestionDialog = false;
@@ -1042,14 +1407,104 @@ export class TestManagement implements OnInit {
     refreshCurrentView() {
         if (this.selectedTestForExercice) {
             const testId = this.selectedTestForExercice.id;
-            this.associatedExercices = this.exerciceService.getExercicesByTest(testId).map(ex => ({
+            
+            // Capture current expansion states
+            const expandedMap = new Map<string, boolean>();
+            this.associatedExercices.forEach(ex => {
+                if (ex.id) expandedMap.set(ex.id, !!ex._expanded);
+            });
+
+            this.associatedExercices = this.exerciceService.getExercicesByTest(testId).map((ex: Exercice) => ({
                 ...ex,
-                questions: this.questionService.getQuestionsByExercice(ex.id)
+                questions: this.questionService.getQuestionsByExercice(ex.id),
+                _expanded: expandedMap.get(ex.id) || false
             }));
 
             // Re-fetch tests from service to reflect counter changes in main table
             this.tests = this.testService.getTests();
         }
+    }
+
+    async detachExerciceFromTest(ex: any) {
+        if (!this.selectedTestForExercice) return;
+        const testId = this.selectedTestForExercice.id;
+
+        this.confirmationService.confirm({
+            message: `Êtes-vous sûr de vouloir détacher l'exercice "${ex.titre}" de ce test ?`,
+            header: 'Confirmation de détachement',
+            icon: 'pi pi-exclamation-triangle',
+            accept: async () => {
+                try {
+                    const currentTestIds = ex.testIds || (ex.testId ? [ex.testId] : []);
+                    const updatedTestIds = currentTestIds.filter((id: string) => id !== testId);
+                    
+                    await this.exerciceService.updateExercice({
+                        ...ex,
+                        testIds: updatedTestIds
+                    });
+
+                    this.messageService.add({ severity: 'success', summary: 'Succès', detail: 'Exercice détaché avec succès' });
+                    
+                    this.testService.fetchTests();
+                    this.exerciceService.fetchExercices();
+                    this.refreshCurrentView();
+                } catch (err) {
+                    this.messageService.add({ severity: 'error', summary: 'Erreur', detail: 'Échec du détachement' });
+                }
+            }
+        });
+    }
+
+    async detachQuestionFromExercice(ex: any, q: any) {
+        this.confirmationService.confirm({
+            message: `Êtes-vous sûr de vouloir détacher cette question de l'exercice "${ex.titre}" ?`,
+            header: 'Confirmation de détachement',
+            icon: 'pi pi-exclamation-triangle',
+            accept: async () => {
+                try {
+                    const currentExIds = q.exerciceIds || [];
+                    const updatedExIds = currentExIds.filter((id: string) => id !== ex.id);
+                    await this.questionService.updateQuestion({ ...q, exerciceIds: updatedExIds });
+                    this.messageService.add({ severity: 'success', summary: 'Succès', detail: 'Question détachée avec succès' });
+                    this.refreshCurrentView();
+                } catch (err) {
+                    this.messageService.add({ severity: 'error', summary: 'Erreur', detail: 'Échec du détachement' });
+                }
+            }
+        });
+    }
+
+    // Direct Edit logic (Immediate DB updates)
+    openEditExerciceDirect(ex: Exercice) {
+        this.isEditingEx = true;
+        this.managedExerciseId = ex.id;
+        this.exMode = 'existing';
+        this.exTitre = ex.titre;
+        this.exExistingId = ex.id;
+        this.targetExIdx = -4; // Special ID for direct exercise rename
+        this.submittedEx = false;
+        this.addExerciceDialog = true;
+    }
+
+    openEditQuestionDirect(ex: any, q: any) {
+        this.managedExerciseId = ex.id;
+        this.isEditingQ = true;
+        this.targetExIdx = -5; // Special ID for direct question edit
+        this.targetQIdx = -1; // Not used but avoids errors
+        this.qMode = 'existing';
+        this.qEnonce = q.enonce;
+        this.qType = q.typeQuestion;
+        this.qTrueFalse = (q.typeQuestion === 'TRUE_FALSE' && q.reponsesCorrectes?.length) ? q.reponsesCorrectes[0] : 'Vrai';
+        this.qReponseLibre = (q.typeQuestion === 'QUESTION_REPONSE' && q.reponsesCorrectes?.length) ? q.reponsesCorrectes[0] : '';
+        this.props = (q.propositions || []).map((p: string) => ({
+            text: p,
+            isCorrect: q.reponsesCorrectes?.includes(p) || false
+        }));
+        if (this.props.length === 0) this.props = [{ text: '', isCorrect: false }, { text: '', isCorrect: false }];
+        
+        this.qExistingId = q.id;
+        this.submittedQ = false;
+        this.addQuestionDialog = true;
     }
 
     // ─── Preview Candidat ─────────────────────────────
@@ -1059,6 +1514,13 @@ export class TestManagement implements OnInit {
     }
 
     removeQuestion(exIdx: number, qIdx: number) {
+        const q = this.exercicesPrep[exIdx].questions[qIdx];
+        if (q.mode === 'existing' && q.existingQuestionId) {
+            if (!this.exercicesPrep[exIdx].removedQuestionIds) {
+                this.exercicesPrep[exIdx].removedQuestionIds = [];
+            }
+            this.exercicesPrep[exIdx].removedQuestionIds?.push(q.existingQuestionId);
+        }
         this.exercicesPrep[exIdx].questions.splice(qIdx, 1);
     }
 
@@ -1120,14 +1582,18 @@ export class TestManagement implements OnInit {
             if (!titre) return;
             exerciceId = await this.exerciceService.addExercice({
                 titre: titre,
-                testId: this.selectedTestForExercice.id,
+                testIds: [this.selectedTestForExercice.id],
                 questionCount: this.quickAddQuestions.length
             });
         } else {
             if (!this.quickExExistingId || !this.selectedTestForExercice.id) return;
             const ex = this.exercices().find(e => e.id === this.quickExExistingId);
             if (!ex) return;
-            await this.exerciceService.updateExercice({ ...ex, testId: this.selectedTestForExercice.id });
+            
+            const currentTestIds = ex.testIds || (ex.testId ? [ex.testId] : []);
+            if (!currentTestIds.includes(this.selectedTestForExercice.id)) {
+                await this.exerciceService.updateExercice({ ...ex, testIds: [...currentTestIds, this.selectedTestForExercice.id] });
+            }
             exerciceId = ex.id;
         }
 
@@ -1164,7 +1630,7 @@ export class TestManagement implements OnInit {
     // ─── View exercises accordion ─────────────────────
     viewExercices(test: TechnicalTest) {
         this.selectedTestForExercice = test;
-        this.associatedExercices = this.exerciceService.getExercicesByTest(test.id).map(ex => ({
+        this.associatedExercices = this.exerciceService.getExercicesByTest(test.id).map((ex: Exercice) => ({
             ...ex,
             questions: this.questionService.getQuestionsByExercice(ex.id)
         }));
@@ -1182,8 +1648,8 @@ export class TestManagement implements OnInit {
         this.confirmationService.confirm({
             message: 'Êtes-vous sûr de vouloir supprimer le test: ' + test.titre + ' ?',
             header: 'Confirmer', icon: 'pi pi-exclamation-triangle',
-            accept: () => {
-                this.testService.deleteTest(test.id);
+            accept: async () => {
+                await this.testService.deleteTest(test.id);
                 this.messageService.add({ severity: 'success', summary: 'Succès', detail: 'Test supprimé', life: 3000 });
             }
         });
@@ -1193,8 +1659,11 @@ export class TestManagement implements OnInit {
         this.confirmationService.confirm({
             message: 'Êtes-vous sûr de vouloir supprimer les tests sélectionnés ?',
             header: 'Confirmer', icon: 'pi pi-exclamation-triangle',
-            accept: () => {
-                this.selectedTests?.forEach(t => this.testService.deleteTest(t.id));
+            accept: async () => {
+                if (this.selectedTests) {
+                    const ids = this.selectedTests.map(t => t.id);
+                    await this.testService.deleteMultipleTests(ids);
+                }
                 this.selectedTests = null;
                 this.messageService.add({ severity: 'success', summary: 'Succès', detail: 'Tests supprimés', life: 3000 });
             }

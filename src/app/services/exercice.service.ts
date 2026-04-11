@@ -5,7 +5,8 @@ import { firstValueFrom } from 'rxjs';
 export interface Exercice {
     id: string;
     titre: string;
-    testId: string;
+    testIds: string[];
+    testId?: string; // Added for UI compatibility
     questionCount?: number;
     questions?: any[];
 }
@@ -13,7 +14,8 @@ export interface Exercice {
 export interface ExerciceDTO {
     id: number;
     titre: string;
-    testId: number;
+    testIds?: number[];
+    testId?: number; // Added for compatibility
     questions?: any[];
 }
 
@@ -40,10 +42,15 @@ export class ExerciceService {
     }
 
     private mapToExercice(dto: ExerciceDTO): Exercice {
+        const testIds = (dto.testIds || []).map(id => id.toString());
+        // Use testId from dto if present, or first one from testIds
+        let testId = dto.testId?.toString() || (testIds.length > 0 ? testIds[0] : undefined);
+        
         return {
             id: dto.id.toString(),
             titre: dto.titre,
-            testId: dto.testId.toString(),
+            testIds,
+            testId,
             questionCount: dto.questions?.length || 0,
             questions: dto.questions
         };
@@ -53,18 +60,31 @@ export class ExerciceService {
         return this.exercices;
     }
 
-    getExercicesByTest(testId: string): Exercice[] {
-        return this.exercices().filter(ex => ex.testId === testId);
+    async getByTestId(testId: string): Promise<Exercice[]> {
+        const dtos = await firstValueFrom(this.http.get<ExerciceDTO[]>(`${this.apiUrl}/test/${testId}`));
+        return dtos.map(dto => this.mapToExercice(dto));
     }
 
-    async addExercice(exercice: Omit<Exercice, 'id'>): Promise<string> {
-        const dto = {
-            titre: exercice.titre,
-            testId: parseInt(exercice.testId)
-        };
+    getExercicesByTest(testId: string): Exercice[] {
+        return this.exercices().filter(ex => ex.testIds.includes(testId));
+    }
 
+    async addExercice(exercice: Partial<Exercice> & { testId?: string, testIds?: string[] }): Promise<string> {
         try {
-            const saved = await firstValueFrom(this.http.post<ExerciceDTO>(`${this.apiUrl}/test/${dto.testId}`, dto));
+            // Determine test IDs
+            let ids: number[] = [];
+            if (Array.isArray(exercice.testIds)) {
+                ids = exercice.testIds.map(id => parseInt(id));
+            } else if (exercice.testId) {
+                ids = [parseInt(exercice.testId)];
+            }
+
+            const dto: Partial<ExerciceDTO> = {
+                titre: exercice.titre,
+                testIds: ids
+            };
+            
+            const saved = await firstValueFrom(this.http.post<ExerciceDTO>(this.apiUrl, dto));
             const mapped = this.mapToExercice(saved);
             this.exercices.update((exs) => [mapped, ...exs]);
             return mapped.id;
@@ -75,9 +95,16 @@ export class ExerciceService {
     }
 
     async updateExercice(updatedEx: Exercice) {
-        const dto = {
+        let ids: number[] = [];
+        if (Array.isArray(updatedEx.testIds)) {
+            ids = updatedEx.testIds.map(id => parseInt(id));
+        } else if (updatedEx.testId) {
+            ids = [parseInt(updatedEx.testId)];
+        }
+
+        const dto: Partial<ExerciceDTO> = {
             titre: updatedEx.titre,
-            testId: parseInt(updatedEx.testId)
+            testIds: ids
         };
 
         try {
@@ -96,6 +123,20 @@ export class ExerciceService {
             this.exercices.update((exs) => exs.filter(ex => ex.id !== id));
         } catch (err) {
             console.error('Error deleting exercice', err);
+            throw err;
+        }
+    }
+
+    async deleteMultiple(ids: string[]) {
+        const numericIds = ids.map(id => parseInt(id));
+        try {
+            await firstValueFrom(this.http.request('delete', `${this.apiUrl}/delete-multiple`, {
+                body: numericIds,
+                responseType: 'text'
+            }));
+            this.exercices.update((exs) => exs.filter(ex => !ids.includes(ex.id)));
+        } catch (err) {
+            console.error('Error deleting multiple exercices', err);
             throw err;
         }
     }

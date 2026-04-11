@@ -14,6 +14,7 @@ export interface InternshipApplication {
     iaScore?: number;
     iaApproved?: boolean;
     encadrantId?: string;
+    utilisateurId?: string;
 }
 
 export interface InternshipOffer {
@@ -175,13 +176,20 @@ export class InternshipService {
     }
 
     async updateOffer(updatedOffer: InternshipOffer) {
+        // Optimistic update: update the signal immediately so the UI reflects changes instantly
+        this.offers.update((offers) => offers.map(o => o.id === updatedOffer.id ? { ...updatedOffer } : o));
+
         const dto = this.mapToDTO(updatedOffer);
         try {
             const savedDto = await firstValueFrom(this.http.put<OffreStageDTO>(`${this.apiUrl}/${dto.id}`, dto));
             const mapped = this.mapToInternshipOffer(savedDto);
+            
+            // Sync with server response to ensure we have the correct server-side state
             this.offers.update((offers) => offers.map(o => o.id === mapped.id ? mapped : o));
         } catch (err) {
             console.error('Error updating offer', err);
+            // Rollback by fetching from server if the update fails
+            this.fetchOffers();
             throw err;
         }
     }

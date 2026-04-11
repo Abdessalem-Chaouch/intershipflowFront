@@ -7,7 +7,7 @@ export interface TechnicalTest {
     titre: string;
     description: string;
     dureeMinutes: number;
-    offerId: string;
+    offerIds: string[];
     exerciceCount?: number;
 }
 
@@ -16,7 +16,7 @@ export interface TestResponseDTO {
     titre: string;
     description: string;
     dureeMinutes: number;
-    offreId: number;
+    offreIds: number[];
     exercices?: { id: number; titre: string }[];
 }
 
@@ -24,7 +24,7 @@ export interface TestRequestDTO {
     titre: string;
     description: string;
     dureeMinutes: number;
-    offreId: number;
+    offreIds: number[];
 }
 
 @Injectable({
@@ -55,7 +55,7 @@ export class TestService {
             titre: dto.titre,
             description: dto.description,
             dureeMinutes: dto.dureeMinutes,
-            offerId: dto.offreId.toString(),
+            offerIds: dto.offreIds?.map(id => id.toString()) || [],
             exerciceCount: dto.exercices?.length || 0
         };
     }
@@ -64,44 +64,71 @@ export class TestService {
         return this.tests;
     }
 
-    async addTest(test: Omit<TechnicalTest, 'id'>): Promise<string> {
+    async getTestById(id: string): Promise<TechnicalTest> {
+        try {
+            const dto = await firstValueFrom(this.http.get<TestResponseDTO>(`${this.apiUrl}/${id}`));
+            return this.mapToTechnicalTest(dto);
+        } catch (err) {
+            console.error('Error fetching test by id', err);
+            throw err;
+        }
+    }
+
+    async getTestsByOffer(offerId: string): Promise<TechnicalTest[]> {
+        try {
+            const dtos = await firstValueFrom(this.http.get<TestResponseDTO[]>(`${this.apiUrl}/offre/${offerId}`));
+            return dtos.map(dto => this.mapToTechnicalTest(dto));
+        } catch (err) {
+            console.error('Error fetching tests by offer', err);
+            throw err;
+        }
+    }
+
+    async addTest(test: Omit<TechnicalTest, 'id' | 'offerIds'> & { offerIds: string[] }): Promise<TechnicalTest> {
         const dto: TestRequestDTO = {
             titre: test.titre,
             description: test.description,
             dureeMinutes: test.dureeMinutes,
-            offreId: parseInt(test.offerId)
+            offreIds: test.offerIds.map(id => parseInt(id))
         };
 
         try {
             const saved = await firstValueFrom(this.http.post<TestResponseDTO>(this.apiUrl, dto));
             const mapped = this.mapToTechnicalTest(saved);
             this.tests.update((tests) => [mapped, ...tests]);
-            return mapped.id;
+            return mapped;
         } catch (err) {
             console.error('Error adding test', err);
             throw err;
         }
     }
 
-    async updateTest(updatedTest: TechnicalTest) {
+    async updateTest(updatedTest: TechnicalTest): Promise<TechnicalTest> {
+        // Optimistic update
+        this.tests.update((tests) => tests.map(t => t.id === updatedTest.id ? { ...updatedTest } : t));
+
         const dto: TestRequestDTO = {
             titre: updatedTest.titre,
             description: updatedTest.description,
             dureeMinutes: updatedTest.dureeMinutes,
-            offreId: parseInt(updatedTest.offerId)
+            offreIds: updatedTest.offerIds.map(id => parseInt(id))
         };
 
         try {
             const saved = await firstValueFrom(this.http.put<TestResponseDTO>(`${this.apiUrl}/${updatedTest.id}`, dto));
             const mapped = this.mapToTechnicalTest(saved);
+            
+            // Sync with backend response
             this.tests.update((tests) => tests.map(t => t.id === mapped.id ? mapped : t));
+            return mapped;
         } catch (err) {
             console.error('Error updating test', err);
+            this.fetchTests(); // Rollback if needed
             throw err;
         }
     }
 
-    async deleteTest(id: string) {
+    async deleteTest(id: string): Promise<void> {
         try {
             await firstValueFrom(this.http.delete(`${this.apiUrl}/${id}`, { responseType: 'text' }));
             this.tests.update((tests) => tests.filter(t => t.id !== id));
@@ -111,7 +138,18 @@ export class TestService {
         }
     }
 
-    getTestsByOffer(offerId: string): TechnicalTest[] {
-        return this.tests().filter(t => t.offerId === offerId);
+    async deleteMultipleTests(ids: string[]): Promise<void> {
+        const numericIds = ids.map(id => parseInt(id));
+        try {
+            await firstValueFrom(this.http.request('delete', `${this.apiUrl}/delete-multiple`, {
+                body: numericIds,
+                responseType: 'text'
+            }));
+            this.tests.update((tests) => tests.filter(t => !ids.includes(t.id)));
+        } catch (err) {
+            console.error('Error deleting multiple tests', err);
+            throw err;
+        }
     }
 }
+

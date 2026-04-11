@@ -68,7 +68,24 @@ export class AppMenu {
                         routerLink: ['/pages/question-management']
                     }
                 ]
+            },
+            {
+                label: 'Suivi des Stages',
+                icon: 'pi pi-fw pi-folder-open',
+                items: [
+                    {
+                        label: 'Dépôt Stagiaire',
+                        icon: 'pi pi-fw pi-cloud-upload',
+                        routerLink: ['/pages/stagiaire-documents']
+                    },
+                    {
+                        label: 'Évaluation Encadrant',
+                        icon: 'pi pi-fw pi-check-square',
+                        routerLink: ['/pages/encadrant-documents']
+                    }
+                ]
             }
+
         ];
     }
 }

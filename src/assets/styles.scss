@@ -2,3 +2,12 @@
 @use 'primeicons/primeicons.css';
 @use '@/assets/layout/layout.scss';
 @use '@/assets/demo/demo.scss';
+
+.logout-item {
+    .p-menuitem-link {
+        .p-menuitem-text, .p-menuitem-icon {
+            color: #ef4444 !important; /* text-red-500 */
+            font-weight: 700 !important;
+        }
+    }
+}

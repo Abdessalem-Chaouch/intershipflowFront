@@ -14,7 +14,9 @@ import { ToastModule } from 'primeng/toast';
 import { TooltipModule } from 'primeng/tooltip';
 import { MessageService } from 'primeng/api';
 import { InternshipApplication, InternshipService, InternshipOffer } from '../../services/internship.service';
-import { User, UserService } from '../service/user.service';
+import { User, UserService } from '../../services/user.service';
+import { CandidatureService, CandidatureResponseDto } from '../../services/candidature.service';
+import { AffectationService } from '../../services/affectation.service';
 
 @Component({
     selector: 'app-application-management',
@@ -34,7 +36,7 @@ import { User, UserService } from '../service/user.service';
         SelectModule,
         DialogModule
     ],
-    providers: [MessageService, UserService],
+    providers: [MessageService, UserService, CandidatureService, AffectationService],
     template: `
         <div class="card border-none shadow-sm overflow-hidden bg-slate-50/50">
             <p-toolbar styleClass="bg-white border-b border-slate-100 rounded-none mb-0 px-6 py-4">
@@ -61,6 +63,7 @@ import { User, UserService } from '../service/user.service';
                 currentPageReportTemplate="Lignes {first} à {last} de {totalRecords}"
                 [showCurrentPageReport]="true"
                 [rowsPerPageOptions]="[10, 20, 30]"
+                [loading]="loading()"
                 styleClass="p-datatable-sm"
             >
                 <ng-template #caption>
@@ -72,7 +75,7 @@ import { User, UserService } from '../service/user.service';
                         </div>
                         <div class="flex items-center gap-3">
                             <p-select 
-                                [options]="offers" 
+                                [options]="internshipService.getOffers()()" 
                                 [(ngModel)]="selectedOffer" 
                                 (onChange)="onOfferFilter(dt, $event)" 
                                 placeholder="Toutes les offres" 
@@ -85,6 +88,7 @@ import { User, UserService } from '../service/user.service';
                                 <p-inputicon styleClass="pi pi-search text-slate-400" />
                                 <input pInputText type="text" (input)="onGlobalFilter(dt, $event)" 
                                     placeholder="Recherche rapide..." 
+                                    [autofocus]="false"
                                     class="w-72 border-slate-200 shadow-none text-sm rounded-xl" />
                             </p-iconfield>
                         </div>
@@ -160,6 +164,38 @@ import { User, UserService } from '../service/user.service';
                 </ng-template>
             </p-table>
         </div>
+
+        <!-- Dialog d'affectation d'encadrant -->
+        <p-dialog [(visible)]="assignmentDialog" [style]="{width: '450px'}" header="Affecter un Encadrant" [modal]="true" styleClass="p-fluid">
+            <ng-template #content>
+                <div class="flex flex-col gap-4 py-2">
+                    <div class="flex flex-col gap-2">
+                        <label for="supervisor" class="text-sm font-bold text-slate-700">Choisir l'encadrant</label>
+                        <p-select 
+                            id="supervisor"
+                            [options]="availableSupervisors" 
+                            [(ngModel)]="selectedSupervisorId" 
+                            optionLabel="fullName" 
+                            optionValue="id"
+                            placeholder="Sélectionner un encadrant" 
+                            appendTo="body"
+                            styleClass="w-full border-slate-200">
+                        </p-select>
+                        <small class="text-slate-400" *ngIf="selectedApp">
+                            Affectation pour: <span class="font-bold">{{selectedApp.firstName}} {{selectedApp.lastName}}</span>
+                        </small>
+                    </div>
+                </div>
+            </ng-template>
+
+            <ng-template #footer>
+                <div class="flex justify-end gap-2 p-4 border-t border-slate-50">
+                    <p-button label="Annuler" icon="pi pi-times" [text]="true" severity="secondary" (onClick)="assignmentDialog = false" />
+                    <p-button label="Confirmer l'affectation" icon="pi pi-check" (onClick)="confirmAssignment()" [disabled]="!selectedSupervisorId" [loading]="loading()" />
+                </div>
+            </ng-template>
+        </p-dialog>
+
         <p-toast />
     `
 })
@@ -176,23 +212,69 @@ export class ApplicationManagement implements OnInit {
     allUsers: User[] = [];
 
     constructor(
-        private internshipService: InternshipService,
+        public internshipService: InternshipService,
         private userService: UserService,
+        private candidatureService: CandidatureService,
+        private affectationService: AffectationService,
         private messageService: MessageService
     ) {}
 
-    ngOnInit() {
-        this.applications = this.internshipService.getApplications();
-        this.offers = this.internshipService.getOffers()();
-        this.userService.getUsers().then(data => {
-            this.allUsers = data;
-            this.availableSupervisors = data
+    loading = signal<boolean>(false);
+
+    async ngOnInit() {
+        this.loading.set(true);
+        try {
+            // Sequential loading for better stability
+            this.allUsers = await this.userService.getUsers();
+            
+            this.availableSupervisors = this.allUsers
                 .filter(u => u.role === 'Encadrant')
                 .map(u => ({
                     id: u.id,
                     fullName: `${u.firstName} ${u.lastName}`
                 }));
-        });
+            
+            await this.loadApplications();
+        } catch (err) {
+            console.error('Error in ngOnInit', err);
+        } finally {
+            this.loading.set(false);
+        }
+    }
+
+    async loadApplications() {
+        try {
+            const dtos = await this.candidatureService.fetchAll();
+            if (!Array.isArray(dtos)) throw new Error('Data is not an array');
+            
+            const mapped = dtos.map(dto => this.mapToInternshipApplication(dto));
+            this.applications.set(mapped);
+        } catch (err) {
+            console.error('Load Error Detail:', err);
+            this.messageService.add({ severity: 'error', summary: 'Erreur', detail: 'Chargement des candidatures échoué' });
+        }
+    }
+
+    private mapToInternshipApplication(dto: CandidatureResponseDto): InternshipApplication {
+        const currentOffers = this.internshipService.getOffers()();
+        const offer = currentOffers.find(o => o.id === (dto.offreStageId?.toString() ?? ''));
+        // Try to match by utilisateurId or username if available in DTO
+        const user = this.allUsers.find(u => u.id === dto.utilisateurId?.toString());
+        
+        return {
+            id: dto.id?.toString() || Math.random().toString(),
+            offerTitle: offer ? offer.title : (dto.offreStageId ? `Offre #${dto.offreStageId}` : 'Offre inconnue'),
+            firstName: dto.prenom || 'N/A',
+            lastName: dto.nom || 'N/A',
+            cvName: dto.cvNodeId || 'N/A',
+            letterName: dto.lettreMotivationNodeId || 'N/A',
+            status: (dto.etat === 'ACCEPTEE' || dto.etat === 'REFUSEE' || dto.etat === 'EN_ATTENTE') ? dto.etat as any : 'EN_ATTENTE',
+            date: new Date(), 
+            iaScore: dto.scoreAI,
+            iaApproved: dto.approvedByAI,
+            encadrantId: user ? user.encadrantId : undefined,
+            utilisateurId: dto.utilisateurId?.toString()
+        };
     }
 
     onGlobalFilter(table: any, event: Event) {
@@ -234,12 +316,14 @@ export class ApplicationManagement implements OnInit {
         return superv ? `${superv.firstName} ${superv.lastName}` : 'N/A';
     }
 
-    updateStatus(app: InternshipApplication, newStatus: 'ACCEPTEE' | 'REFUSEE' | 'EN_ATTENTE') {
-        const apps = [...this.applications()];
-        const index = apps.findIndex(a => a.id === app.id);
-        if (index !== -1) {
-            apps[index] = { ...apps[index], status: newStatus };
-            this.internshipService.getApplications().set(apps);
+    async updateStatus(app: InternshipApplication, newStatus: 'ACCEPTEE' | 'REFUSEE' | 'EN_ATTENTE') {
+        try {
+            const id = parseInt(app.id);
+            if (newStatus === 'ACCEPTEE') await this.candidatureService.accepter(id);
+            else if (newStatus === 'REFUSEE') await this.candidatureService.refuser(id);
+            else await this.candidatureService.mettreEnAttente(id);
+
+            await this.loadApplications();
             this.messageService.add({
                 severity: 'success',
                 summary: 'Statut mis à jour',
@@ -247,8 +331,11 @@ export class ApplicationManagement implements OnInit {
             });
 
             if (newStatus === 'ACCEPTEE' && !app.encadrantId) {
-                this.openAssignDialog(apps[index]);
+                const refreshedApp = this.applications().find(a => a.id === app.id);
+                if (refreshedApp) this.openAssignDialog(refreshedApp);
             }
+        } catch (err) {
+            this.messageService.add({ severity: 'error', summary: 'Erreur', detail: 'Mise à jour du statut échouée' });
         }
     }
 
@@ -258,20 +345,27 @@ export class ApplicationManagement implements OnInit {
         this.assignmentDialog = true;
     }
 
-    confirmAssignment() {
+    async confirmAssignment() {
         if (!this.selectedApp || !this.selectedSupervisorId) return;
 
-        const apps = [...this.applications()];
-        const index = apps.findIndex(a => a.id === this.selectedApp?.id);
-        if (index !== -1) {
-            apps[index] = { ...apps[index], encadrantId: this.selectedSupervisorId };
-            this.internshipService.getApplications().set(apps);
+        try {
+            // Must use the utilisateurId (Keycloak ID) for the affectation
+            const stagiaireId = this.selectedApp.utilisateurId || this.selectedApp.id;
+
+            await this.affectationService.affecter({
+                stagiaireId: stagiaireId,
+                encadrantId: this.selectedSupervisorId
+            });
+
             this.messageService.add({
                 severity: 'success',
                 summary: 'Affectation réussie',
                 detail: `L'encadrant a été affecté à ${this.selectedApp.firstName}.`
             });
             this.assignmentDialog = false;
+            this.loadApplications();
+        } catch (err) {
+            this.messageService.add({ severity: 'error', summary: 'Erreur', detail: "Échec de l'affectation" });
         }
     }
 }

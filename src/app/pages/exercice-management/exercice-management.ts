@@ -19,6 +19,8 @@ import { CheckboxModule } from 'primeng/checkbox';
 import { RadioButtonModule } from 'primeng/radiobutton';
 import { TextareaModule } from 'primeng/textarea';
 import { DividerModule } from 'primeng/divider';
+import { MultiSelectModule } from 'primeng/multiselect';
+import { OrderListModule } from 'primeng/orderlist';
 import { ExerciceService, Exercice } from '@/app/services/exercice.service';
 import { TestService, TechnicalTest } from '@/app/services/test.service';
 import { QuestionService, Question } from '@/app/services/question.service';
@@ -45,12 +47,22 @@ import { QuestionService, Question } from '@/app/services/question.service';
         CheckboxModule,
         RadioButtonModule,
         TextareaModule,
-        DividerModule
+        DividerModule,
+        MultiSelectModule,
+        OrderListModule
     ],
+    styles: [`
+        :host ::ng-deep .hide-reorder-controls .p-orderlist-controls {
+            display: none;
+        }
+        :host ::ng-deep .hide-reorder-controls .p-orderlist-list-container {
+            width: 100% !important;
+        }
+    `],
     template: `
         <p-toolbar styleClass="mb-6">
             <ng-template #start>
-                <p-button label="Nouveau" icon="pi pi-plus" severity="secondary" class="mr-2" (onClick)="openNew()" />
+                <p-button label="Nouvel Exercice" icon="pi pi-plus" severity="secondary" class="mr-2" (onClick)="openNew()" />
                 <p-button label="Supprimer" icon="pi pi-trash" severity="secondary" [outlined]="true" (onClick)="deleteSelectedExercices()" [disabled]="!selectedExercices || !selectedExercices.length"  />
             </ng-template>
             <ng-template #end>
@@ -63,7 +75,7 @@ import { QuestionService, Question } from '@/app/services/question.service';
                 <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                     <h5 class="m-0 text-2xl font-bold">Gestion des Exercices</h5>
                     <div class="flex flex-col md:flex-row gap-2">
-                        <p-select [options]="tests()" optionLabel="titre" optionValue="id" [showClear]="true" placeholder="Filtrer par test" (onChange)="onTestFilter(dt, $event)" class="w-full md:w-64" />
+                        <p-multiselect [options]="tests()" optionLabel="titre" optionValue="id" placeholder="Filtrer par tests" (onChange)="onTestFilter(dt, $event)" class="w-full md:w-64" display="chip" />
                         <p-iconfield>
                             <p-inputicon styleClass="pi pi-search" />
                             <input pInputText type="text" (input)="onGlobalFilter(dt, $event)" placeholder="Rechercher..." />
@@ -75,7 +87,7 @@ import { QuestionService, Question } from '@/app/services/question.service';
                 <tr>
                     <th style="width: 3rem"><p-tableHeaderCheckbox /></th>
                     <th pSortableColumn="titre">Titre <p-sortIcon field="titre" /></th>
-                    <th pSortableColumn="testId">Test associé <p-sortIcon field="testId" /></th>
+                    <th style="min-width: 12rem">Tests associés</th>
                     <th style="min-width: 8rem">Questions</th>
                     <th style="min-width: 10rem">Actions</th>
                 </tr>
@@ -84,15 +96,18 @@ import { QuestionService, Question } from '@/app/services/question.service';
                 <tr>
                     <td><p-tableCheckbox [value]="exercice" /></td>
                     <td class="font-medium">{{ exercice.titre }}</td>
-                    <td>{{ getTestName(exercice.testId) }}</td>
+                    <td><p-tag *ngFor="let testName of getTestNames(exercice.testIds)" [value]="testName" severity="secondary" styleClass="mr-1 mb-1 text-[10px]" />
+                        <span *ngIf="!exercice.testIds || !exercice.testIds.length" class="text-xs text-slate-400 italic">Aucun</span>
+                    </td>
                     <td>
                         <div class="flex items-center gap-2">
-                            <p-tag [value]="(exercice.questionCount || 0) + ' questions'" severity="info" class="cursor-pointer hover:opacity-80 transition-opacity" (click)="viewQuestions(exercice)" />
-                            <p-button icon="pi pi-plus" pTooltip="Ajouter une question" [rounded]="true" [text]="true" size="small" [style]="{'color':'#063970'}" (click)="openQuickAddQuestion(exercice)" />
+                             <p-tag [value]="(exercice.questionCount || 0) + ' questions'" severity="info" class="cursor-pointer hover:opacity-80 transition-opacity" (click)="viewQuestionsSimple(exercice)" />
+                             <p-button icon="pi pi-plus" pTooltip="Ajouter une question" [rounded]="true" [text]="true" size="small" [style]="{'color':'#063970'}" (click)="openQuickAddQuestion(exercice)" />
                         </div>
                     </td>
                     <td>
                         <div class="flex gap-2">
+                            <p-button icon="pi pi-eye" [rounded]="true" [outlined]="true" (click)="viewQuestionsPreview(exercice)" [style]="{'color':'#063970', 'border-color':'#063970'}" pTooltip="Voir l'aperçu et ordonner" />
                             <p-button icon="pi pi-pencil" [rounded]="true" [outlined]="true" (click)="editExercice(exercice)" />
                             <p-button icon="pi pi-trash" severity="danger" [rounded]="true" [outlined]="true" (click)="deleteExercice(exercice)" />
                         </div>
@@ -111,9 +126,9 @@ import { QuestionService, Question } from '@/app/services/question.service';
                     </div>
 
                     <div>
-                        <label for="test" class="block font-bold mb-2">Test technique</label>
-                        <p-select id="test" [(ngModel)]="exercice.testId" [options]="tests()" optionLabel="titre" optionValue="id" placeholder="Choisir un test" [fluid]="true" appendTo="body" />
-                        <small class="text-red-500" *ngIf="submitted && !exercice.testId">Le test est requis.</small>
+                        <label for="tests" class="block font-bold mb-2">Tests techniques (Optionnel)</label>
+                        <p-multiselect id="tests" [(ngModel)]="exercice.testIds" [options]="tests()" optionLabel="titre" optionValue="id" placeholder="Choisir des tests" [fluid]="true" appendTo="body" display="chip" />
+                        <small class="text-blue-500 italic mt-1 block">Optionnel : L'exercice peut être rattaché à plusieurs tests.</small>
                     </div>
                 </div>
             </ng-template>
@@ -125,11 +140,18 @@ import { QuestionService, Question } from '@/app/services/question.service';
         </p-dialog>
 
         <!-- Quick Add Question Dialog -->
-        <p-dialog [(visible)]="questionDialog" [style]="{ width: '650px' }" [breakpoints]="{ '1199px': '75vw', '575px': '90vw' }" header="Ajouter une question à {{ selectedExerciceForQuestion?.titre }}" [modal]="true" class="p-fluid">
+        <p-dialog [(visible)]="questionDialog" [style]="{ width: '650px' }" [breakpoints]="{ '1199px': '75vw', '575px': '90vw' }" [header]="selectedExerciceForQuestion ? 'Ajouter une question à ' + selectedExerciceForQuestion.titre : 'Créer une nouvelle question isolée'" [modal]="true" class="p-fluid">
             <ng-template #content>
                 <div class="flex flex-col gap-5 pt-2">
+                    <!-- Exercise Selection (Hidden if adding from a specific exercise) -->
+                    <div *ngIf="!selectedExerciceForQuestion">
+                        <label class="block font-bold mb-2">Exercices techniques (Optionnel)</label>
+                        <p-multiselect [(ngModel)]="targetExerciceIds" [options]="exercices()" optionLabel="titre" optionValue="id" placeholder="Choisir un ou plusieurs exercices" [fluid]="true" appendTo="body" display="chip" />
+                        <small class="text-blue-500 italic mt-1 block">Optionnel : La question peut être rattachée à plusieurs exercices ou aucun.</small>
+                    </div>
+
                     <!-- Mode Selection -->
-                    <div>
+                    <div *ngIf="!newQuestion.id">
                         <label class="block text-xs font-black text-slate-700 uppercase tracking-widest mb-4">Mode d'ajout</label>
                         <div class="grid grid-cols-2 gap-4">
                             <!-- New Question Card -->
@@ -162,7 +184,7 @@ import { QuestionService, Question } from '@/app/services/question.service';
                         </div>
                     </div>
 
-                    <p-divider />
+                    <p-divider *ngIf="!newQuestion.id" />
 
                     <!-- NEW QUESTION FORM -->
                     <div *ngIf="qMode==='new'" class="flex flex-col gap-4 animate-in fade-in duration-300">
@@ -210,7 +232,7 @@ import { QuestionService, Question } from '@/app/services/question.service';
                 <div *ngIf="qMode==='existing'" class="flex flex-col gap-4 animate-in fade-in duration-300">
                         <div>
                             <label class="block font-bold text-slate-800 mb-2">Choisir une question existante</label>
-                            <p-select [(ngModel)]="qExistingId" [options]="questions()" optionLabel="enonce" optionValue="id"
+                            <p-select [(ngModel)]="qExistingId" [options]="getAvailableExistingQuestions()" optionLabel="enonce" optionValue="id"
                                 placeholder="Sélectionner une question" [fluid]="true" appendTo="body" [filter]="true" filterBy="enonce">
                                 <ng-template #item let-q>
                                     <div class="flex items-center gap-2">
@@ -252,57 +274,109 @@ import { QuestionService, Question } from '@/app/services/question.service';
 
             <ng-template #footer>
                 <p-button label="Annuler" icon="pi pi-times" [text]="true" (click)="questionDialog = false" />
-                <p-button label="Créer la question" icon="pi pi-check" (click)="saveQuickQuestion()" [style]="{ 'background-color': '#063970', 'border-color': '#063970' }" />
+                <p-button [label]="newQuestion.id ? 'Modifier la question' : 'Créer la question'" icon="pi pi-check" (click)="saveQuickQuestion()" [style]="{ 'background-color': '#063970', 'border-color': '#063970' }" />
             </ng-template>
         </p-dialog>
 
-        <!-- View Associated Questions Dialog -->
-        <p-dialog [(visible)]="viewQuestionsDialog" [style]="{ width: '800px' }" [breakpoints]="{ '1199px': '75vw', '575px': '90vw' }" header="Questions associées - {{ selectedExerciceForQuestion?.titre }}" [modal]="true">
-            <p-table [value]="associatedQuestions" [tableStyle]="{ 'min-width': '100%' }" class="p-fluid" dataKey="id">
+        <!-- 1. MODE TABLEAU SIMPLE -->
+        <p-dialog [(visible)]="viewQuestionsSimpleDialog" [style]="{ width: '900px' }" [breakpoints]="{ '1199px': '75vw', '575px': '90vw' }" header="Liste des questions : {{ selectedExerciceForQuestion?.titre }}" [modal]="true">
+            <p-table [value]="associatedQuestions" [tableStyle]="{ 'min-width': '100%' }" class="p-fluid">
                 <ng-template #header>
                     <tr>
-                        <th style="width: 15%">Type</th>
-                        <th style="width: 35%">Enoncé</th>
+                        <th style="width: 10%">Type</th>
+                        <th style="width: 30%">Enoncé</th>
                         <th style="width: 25%">Propositions</th>
                         <th style="width: 25%">Réponses Correctes</th>
+                        <th style="width: 10%">Actions</th>
                     </tr>
                 </ng-template>
                 <ng-template #body let-q>
                     <tr>
                         <td class="p-3"><p-tag [value]="q.typeQuestion" severity="info" /></td>
                         <td class="font-bold p-3">{{ q.enonce }}</td>
-                        <td class="text-sm text-gray-600 p-3">{{ q.propositions?.length ? q.propositions.join(', ') : '-' }}</td>
-                        <td class="text-sm text-green-700 font-bold p-3">{{ q.reponsesCorrectes?.length ? q.reponsesCorrectes.join(', ') : '-' }}</td>
+                        <td class="p-3">
+                            <span class="text-sm text-slate-500 italic">
+                                {{ q.propositions?.length ? q.propositions.join(' - ') : '-' }}
+                            </span>
+                        </td>
+                        <td class="p-3">
+                            <div class="flex flex-wrap gap-1">
+                                <p-tag *ngFor="let rep of q.reponsesCorrectes" [value]="rep" severity="success" styleClass="text-[10px]" />
+                            </div>
+                        </td>
+                        <td class="p-3">
+                            <div class="flex gap-1">
+                                <p-button icon="pi pi-pencil" [rounded]="true" [text]="true" (click)="editQuestion(q)" pTooltip="Modifier la question" />
+                                <p-button icon="pi pi-trash" severity="danger" [rounded]="true" [text]="true" (click)="detachQuestionFromEx(q)" pTooltip="Détacher la question" />
+                            </div>
+                        </td>
                     </tr>
                 </ng-template>
                 <ng-template #empty>
-                    <tr><td colspan="4" class="text-center p-4">Aucune question associée à cet exercice.</td></tr>
+                    <tr><td colspan="5" class="text-center p-4 text-slate-400 font-medium italic">Aucune question associée à cet exercice.</td></tr>
                 </ng-template>
             </p-table>
             <div class="mt-4 flex justify-end">
                 <p-button label="Ajouter une question" icon="pi pi-plus" [text]="true" [style]="{'color':'#063970'}" (click)="openQuickAddQuestion(selectedExerciceForQuestion!)" />
             </div>
-            <ng-template #footer>
-                <p-button label="Fermer" icon="pi pi-times" [text]="true" (click)="viewQuestionsDialog = false" />
-            </ng-template>
+
         </p-dialog>
 
+        <!-- 2. MODE PREVIEW ET CLASSEMENT -->
+        <p-dialog [(visible)]="viewQuestionsPreviewDialog" [style]="{ width: '750px' }" header="Aperçu et Ordonnancement" [modal]="true">
+            <!-- Used CSS to hide reorder controls as property name varies by version -->
+            <p-orderlist [value]="associatedQuestions" [dragdrop]="true" styleClass="w-full hide-reorder-controls" [listStyle]="{ 'width': '100%', 'max-height': '70vh', 'overflow-y': 'auto' }" header="Organisez l'ordre des questions">
+                <ng-template #item let-q let-i="index">
+                    <div class="flex flex-col gap-2 p-4 border border-slate-100 rounded-2xl bg-white mb-2 shadow-sm cursor-move hover:border-blue-200 transition-all min-h-[160px] w-full relative">
+                        <div class="flex items-center justify-between shrink-0">
+                            <div class="flex items-center gap-2">
+                                <span class="bg-[#063970] text-white text-[9px] font-black px-2 py-0.5 rounded-full">#{{ i + 1 }}</span>
+                                <p-tag [value]="q.typeQuestion" severity="secondary" [style]="{'font-size': '10px'}" />
+                            </div>
+                            <i class="pi pi-bars text-slate-300"></i>
+                        </div>
+                        <h4 class="font-bold text-slate-800 text-sm leading-tight shrink-0">{{ q.enonce }}</h4>
+                        
+                        <!-- Mini Preview Props -->
+                        <div class="flex flex-col gap-1 pl-4 border-l-2 border-slate-50 mt-1">
+                             <div *ngFor="let p of q.propositions" class="text-[11px] flex items-center gap-1">
+                                <i *ngIf="q.reponsesCorrectes?.includes(p)" class="pi pi-check text-green-500"></i>
+                                <i *ngIf="!q.reponsesCorrectes?.includes(p)" class="pi pi-circle text-slate-200"></i>
+                                <span [class.text-green-700]="q.reponsesCorrectes?.includes(p)">{{ p }}</span>
+                             </div>
+                        </div>
+                    </div>
+                </ng-template>
+            </p-orderlist>
+            
+            <div class="mt-4 bg-orange-50 p-3 rounded-xl border border-orange-100 flex items-center gap-2 text-xs text-orange-700">
+                <i class="pi pi-info-circle"></i>
+                <span>Utilisez le Drag & Drop (glisser-déposer) pour organiser vos questions.</span>
+            </div>
+
+            <ng-template #footer>
+                <p-button label="Fermer" icon="pi pi-times" [text]="true" (click)="viewQuestionsPreviewDialog = false" />
+            </ng-template>
+        </p-dialog>
         <p-confirmdialog [style]="{ width: '450px' }" />
         <p-toast />
     `,
-    providers: [MessageService, ConfirmationService, QuestionService]
+    providers: [MessageService, ConfirmationService]
 })
 export class ExerciceManagement implements OnInit {
     exerciceDialog: boolean = false;
     questionDialog: boolean = false;
-    viewQuestionsDialog: boolean = false;
+    viewQuestionsSimpleDialog: boolean = false;
+    viewQuestionsPreviewDialog: boolean = false;
     exercice: Partial<Exercice> = {};
     selectedExercices!: Exercice[] | null;
     submitted: boolean = false;
     selectedExerciceForQuestion: Exercice | null = null;
     associatedQuestions: Question[] = [];
     newQuestion: Partial<Question> = {};
-    
+    isStandaloneQuestion: boolean = false;
+    targetExerciceIds: string[] = [];
+
     // Data Signals
     exercices: Signal<Exercice[]>;
     tests: Signal<TechnicalTest[]>;
@@ -339,11 +413,14 @@ export class ExerciceManagement implements OnInit {
         this.questions = this.questionService.getQuestions();
     }
 
-    ngOnInit() {}
+    ngOnInit() { }
 
-    getTestName(testId: string): string {
-        const test = this.tests().find(t => t.id === testId);
-        return test ? test.titre : 'N/A';
+    getTestNames(testIds: string[] = []): string[] {
+        if (!testIds?.length) return [];
+        return testIds.map(id => {
+            const test = this.tests().find(t => t.id === id);
+            return test ? test.titre : 'Inconnu';
+        });
     }
 
     getQuestionById(id: string): Question | undefined {
@@ -355,17 +432,20 @@ export class ExerciceManagement implements OnInit {
     }
 
     onTestFilter(table: Table, event: any) {
-        table.filter(event.value, 'testId', 'equals');
+        table.filter(event.value, 'testIds', 'in');
     }
 
     openNew() {
-        this.exercice = {};
+        this.exercice = { testIds: [] };
         this.submitted = false;
         this.exerciceDialog = true;
     }
 
     editExercice(exercice: Exercice) {
         this.exercice = { ...exercice };
+        if (!this.exercice.testIds) {
+            this.exercice.testIds = exercice.testId ? [exercice.testId] : [];
+        }
         this.exerciceDialog = true;
     }
 
@@ -376,10 +456,14 @@ export class ExerciceManagement implements OnInit {
             icon: 'pi pi-exclamation-triangle',
             accept: async () => {
                 for (const e of this.selectedExercices!) {
+                    const idsToUpdate = e.testIds || (e.testId ? [e.testId] : []);
                     await this.exerciceService.deleteExercice(e.id);
-                    const assocTest = this.tests().find(t => t.id === e.testId);
-                    if (assocTest && assocTest.exerciceCount) {
-                        await this.testService.updateTest({ ...assocTest, exerciceCount: assocTest.exerciceCount - 1 });
+
+                    for (const testId of idsToUpdate) {
+                        const assocTest = this.tests().find(t => t.id === testId);
+                        if (assocTest && assocTest.exerciceCount) {
+                            await this.testService.updateTest({ ...assocTest, exerciceCount: Math.max(0, assocTest.exerciceCount - 1) });
+                        }
                     }
                 }
                 this.selectedExercices = null;
@@ -401,9 +485,12 @@ export class ExerciceManagement implements OnInit {
             accept: async () => {
                 await this.exerciceService.deleteExercice(exercice.id);
 
-                const assocTest = this.tests().find(t => t.id === exercice.testId);
-                if (assocTest && assocTest.exerciceCount) {
-                    await this.testService.updateTest({ ...assocTest, exerciceCount: assocTest.exerciceCount - 1 });
+                const idsToUpdate = exercice.testIds || (exercice.testId ? [exercice.testId] : []);
+                for (const testId of idsToUpdate) {
+                    const assocTest = this.tests().find(t => t.id === testId);
+                    if (assocTest && assocTest.exerciceCount) {
+                        await this.testService.updateTest({ ...assocTest, exerciceCount: Math.max(0, assocTest.exerciceCount - 1) });
+                    }
                 }
 
                 this.messageService.add({ severity: 'success', summary: 'Succès', detail: 'Exercice supprimé', life: 3000 });
@@ -414,15 +501,14 @@ export class ExerciceManagement implements OnInit {
     async saveExercice() {
         this.submitted = true;
 
-        if (this.exercice.titre?.trim() && this.exercice.testId) {
+        if (this.exercice.titre?.trim()) {
             let wasNew = true;
-            let oldTestId: string | null = null;
+            let oldExercice: Exercice | undefined = undefined;
 
             try {
                 if (this.exercice.id) {
                     wasNew = false;
-                    const oldExercice = this.exercices().find(e => e.id === this.exercice.id);
-                    oldTestId = oldExercice ? oldExercice.testId : null;
+                    oldExercice = this.exercices().find(e => e.id === this.exercice.id);
                     await this.exerciceService.updateExercice(this.exercice as Exercice);
                     this.messageService.add({ severity: 'success', summary: 'Succès', detail: 'Exercice mis à jour', life: 3000 });
                 } else {
@@ -431,18 +517,29 @@ export class ExerciceManagement implements OnInit {
                 }
 
                 if (wasNew) {
-                    const assocTest = this.tests().find(t => t.id === this.exercice.testId);
-                    if (assocTest) {
-                        await this.testService.updateTest({ ...assocTest, exerciceCount: (assocTest.exerciceCount || 0) + 1 });
+                    const ids = this.exercice.testIds || [];
+                    for (const testId of ids) {
+                        const assocTest = this.tests().find(t => t.id === testId);
+                        if (assocTest) {
+                            await this.testService.updateTest({ ...assocTest, exerciceCount: (assocTest.exerciceCount || 0) + 1 });
+                        }
                     }
-                } else if (oldTestId && oldTestId !== this.exercice.testId) {
-                    const oldTest = this.tests().find(t => t.id === oldTestId);
-                    if (oldTest && oldTest.exerciceCount) {
-                        await this.testService.updateTest({ ...oldTest, exerciceCount: oldTest.exerciceCount - 1 });
+                } else {
+                    const oldTestIds = oldExercice ? (oldExercice.testIds || (oldExercice.testId ? [oldExercice.testId] : [])) : [];
+                    const newTestIds = this.exercice.testIds || [];
+
+                    // Added
+                    const added = newTestIds.filter((id: string) => !oldTestIds.includes(id));
+                    for (const id of added) {
+                        const t = this.tests().find(test => test.id === id);
+                        if (t) await this.testService.updateTest({ ...t, exerciceCount: (t.exerciceCount || 0) + 1 });
                     }
-                    const newTest = this.tests().find(t => t.id === this.exercice.testId);
-                    if (newTest) {
-                        await this.testService.updateTest({ ...newTest, exerciceCount: (newTest.exerciceCount || 0) + 1 });
+
+                    // Removed
+                    const removed = oldTestIds.filter((id: string) => !newTestIds.includes(id));
+                    for (const id of removed) {
+                        const t = this.tests().find(test => test.id === id);
+                        if (t && t.exerciceCount) await this.testService.updateTest({ ...t, exerciceCount: t.exerciceCount - 1 });
                     }
                 }
 
@@ -454,17 +551,56 @@ export class ExerciceManagement implements OnInit {
         }
     }
 
-    viewQuestions(exercice: Exercice) {
+    viewQuestionsSimple(exercice: Exercice) {
         this.selectedExerciceForQuestion = exercice;
         this.associatedQuestions = this.questionService.getQuestionsByExercice(exercice.id);
-        this.viewQuestionsDialog = true;
+        this.viewQuestionsSimpleDialog = true;
+    }
+
+    viewQuestionsPreview(exercice: Exercice) {
+        this.selectedExerciceForQuestion = exercice;
+        this.associatedQuestions = this.questionService.getQuestionsByExercice(exercice.id);
+        this.viewQuestionsPreviewDialog = true;
     }
 
     openQuickAddQuestion(exercice: Exercice) {
         this.selectedExerciceForQuestion = exercice;
+        this.targetExerciceIds = [exercice.id];
+        this.isStandaloneQuestion = false;
+        this.resetQuestionForm();
+        this.questionDialog = true;
+    }
+
+    openStandaloneQuestion() {
+        this.selectedExerciceForQuestion = null;
+        this.targetExerciceIds = [];
+        this.isStandaloneQuestion = true;
+        this.resetQuestionForm();
+        this.questionDialog = true;
+    }
+
+    editQuestion(q: Question) {
+        this.resetQuestionForm();
+        this.qMode = 'new'; // Show full form
+        this.newQuestion = { ...q };
+        if (q.typeQuestion === 'QCU' || q.typeQuestion === 'QCM') {
+            this.propositionsList = (q.propositions || []).map(text => ({
+                text,
+                isCorrect: (q.reponsesCorrectes || []).includes(text)
+            }));
+        } else if (q.typeQuestion === 'TRUE_FALSE') {
+            this.selectedTrueFalse = q.reponsesCorrectes?.[0] || 'Vrai';
+        } else if (q.typeQuestion === 'QUESTION_REPONSE') {
+            this.reponseLibreTexte = q.reponsesCorrectes?.[0] || '';
+        }
+        this.targetExerciceIds = q.exerciceIds || [];
+        this.questionDialog = true;
+    }
+
+    private resetQuestionForm() {
         this.qMode = 'new';
         this.qExistingId = null;
-        this.newQuestion = { typeQuestion: 'QCU' };
+        this.newQuestion = { typeQuestion: 'QCU', exerciceIds: [] };
         this.questionSubmitted = false;
         this.propositionsList = [
             { text: '', isCorrect: false },
@@ -472,82 +608,104 @@ export class ExerciceManagement implements OnInit {
         ];
         this.selectedTrueFalse = 'Vrai';
         this.reponseLibreTexte = '';
-        this.questionDialog = true;
     }
 
-    saveQuickQuestion() {
+    async saveQuickQuestion() {
         this.questionSubmitted = true;
 
         if (this.qMode === 'new') {
             if (this.newQuestion.enonce?.trim() && this.newQuestion.typeQuestion && this.selectedExerciceForQuestion) {
                 
                 if (this.newQuestion.typeQuestion === 'QCM' || this.newQuestion.typeQuestion === 'QCU') {
-                    const validProps = this.propositionsList.filter(p => p.text.trim() !== '');
+                    const validProps = this.propositionsList.filter(p => (p.text?.trim() || '') !== '');
                     if (validProps.length < 2) {
                         this.messageService.add({ severity: 'error', summary: 'Erreur', detail: 'Veuillez saisir au moins 2 propositions', life: 3000 });
                         return;
                     }
                     this.newQuestion.propositions = validProps.map(p => p.text.trim());
                     this.newQuestion.reponsesCorrectes = validProps.filter(p => p.isCorrect).map(p => p.text.trim());
-                    if (this.newQuestion.reponsesCorrectes.length === 0) {
-                        this.messageService.add({ severity: 'error', summary: 'Erreur', detail: 'Veuillez sélectionner au moins une bonne réponse', life: 3000 });
-                        return;
-                    }
                 } else if (this.newQuestion.typeQuestion === 'TRUE_FALSE') {
                     this.newQuestion.propositions = ['Vrai', 'Faux'];
                     this.newQuestion.reponsesCorrectes = [this.selectedTrueFalse];
                 } else if (this.newQuestion.typeQuestion === 'QUESTION_REPONSE') {
-                    this.newQuestion.propositions = [];
-                    if (!this.reponseLibreTexte.trim()) {
-                        this.messageService.add({ severity: 'error', summary: 'Erreur', detail: 'Veuillez saisir la réponse correcte', life: 3000 });
-                        return;
-                    }
                     this.newQuestion.reponsesCorrectes = [this.reponseLibreTexte.trim()];
-                } else {
-                    this.newQuestion.propositions = [];
-                    this.newQuestion.reponsesCorrectes = [];
                 }
 
-                this.questionService.addQuestion({
-                    ...this.newQuestion,
-                    exerciceId: this.selectedExerciceForQuestion.id
-                } as any);
+                try {
+                    const questionData = {
+                        ...this.newQuestion,
+                        exerciceIds: this.targetExerciceIds
+                    } as any;
 
-                this.updateExQuestionCount();
-                
-                // Refresh the associated list if the view dialog is open
-                if (this.selectedExerciceForQuestion?.id) {
-                    this.associatedQuestions = this.questionService.getQuestionsByExercice(this.selectedExerciceForQuestion.id);
-                }
+                    if (this.newQuestion.id) {
+                        await this.questionService.updateQuestion(questionData);
+                        this.messageService.add({ severity: 'success', summary: 'Succès', detail: 'Question mise à jour avec succès', life: 3000 });
+                    } else {
+                        await this.questionService.addQuestion(questionData);
+                        this.messageService.add({ severity: 'success', summary: 'Succès', detail: 'Nouvelle question ajoutée', life: 3000 });
+                    }
 
-                this.messageService.add({ severity: 'success', summary: 'Succès', detail: 'Question créée et ajoutée', life: 3000 });
-                this.questionDialog = false;
-            }
-        } else {
-            // Existing Question Mode
-            if (this.qExistingId && this.selectedExerciceForQuestion) {
-                const eq = this.getQuestionById(this.qExistingId);
-                if (eq) {
-                    this.questionService.updateQuestion({ ...eq, exerciceId: this.selectedExerciceForQuestion.id });
-                    this.updateExQuestionCount();
+                    // Update counts
+                    for (const id of this.targetExerciceIds) {
+                        await this.updateExQuestionCountById(id);
+                    }
                     
-                    // Refresh the associated list if the view dialog is open
+                    // REFRESH local list from the updated signal
                     if (this.selectedExerciceForQuestion?.id) {
                         this.associatedQuestions = this.questionService.getQuestionsByExercice(this.selectedExerciceForQuestion.id);
                     }
 
-                    this.messageService.add({ severity: 'success', summary: 'Succès', detail: 'Question existante associée', life: 3000 });
                     this.questionDialog = false;
+                } catch (err) {
+                    this.messageService.add({ severity: 'error', summary: 'Erreur', detail: 'Échec de l\'opération' });
+                }
+            }
+        } else {
+            // Existing Question Mode
+            if (this.qExistingId) {
+                const eq = this.getQuestionById(this.qExistingId);
+                if (eq) {
+                    let finalExIds = [...(eq.exerciceIds || [])];
+                    if (this.selectedExerciceForQuestion) {
+                        if (!finalExIds.includes(this.selectedExerciceForQuestion.id)) {
+                            finalExIds.push(this.selectedExerciceForQuestion.id);
+                        }
+                    } else {
+                        finalExIds = this.targetExerciceIds;
+                    }
+
+                    try {
+                        await this.questionService.updateQuestion({ ...eq, exerciceIds: finalExIds });
+                        
+                        if (this.selectedExerciceForQuestion) {
+                            await this.updateExQuestionCountById(this.selectedExerciceForQuestion.id);
+                        } else {
+                            for (const id of this.targetExerciceIds) {
+                                await this.updateExQuestionCountById(id);
+                            }
+                        }
+                        
+                        // REFRESH local list
+                        if (this.selectedExerciceForQuestion?.id) {
+                            this.associatedQuestions = this.questionService.getQuestionsByExercice(this.selectedExerciceForQuestion.id);
+                        }
+
+                        this.messageService.add({ severity: 'success', summary: 'Succès', detail: 'Association réussie', life: 3000 });
+                        this.questionDialog = false;
+                    } catch (err) {
+                        this.messageService.add({ severity: 'error', summary: 'Erreur', detail: 'Échec de l\'association' });
+                    }
                 }
             }
         }
     }
 
-    private async updateExQuestionCount() {
-        if (!this.selectedExerciceForQuestion) return;
-        const currentCount = this.selectedExerciceForQuestion.questionCount || 0;
+    private async updateExQuestionCountById(exId: string) {
+        const exercice = this.exercices().find(e => e.id === exId);
+        if (!exercice) return;
+        const currentCount = exercice.questionCount || 0;
         await this.exerciceService.updateExercice({
-            ...this.selectedExerciceForQuestion,
+            ...exercice,
             questionCount: currentCount + 1
         });
     }
@@ -562,9 +720,56 @@ export class ExerciceManagement implements OnInit {
         }
     }
 
+    getAvailableExistingQuestions(): Question[] {
+        if (!this.selectedExerciceForQuestion) return this.questions();
+        const currentExId = this.selectedExerciceForQuestion.id;
+        return this.questions().filter(q => {
+            const ids = q.exerciceIds || (q.exerciceId ? [q.exerciceId] : []);
+            return !ids.includes(currentExId);
+        });
+    }
+
     onRadioChange(index: number) {
         this.propositionsList.forEach((p, i) => {
             if (i !== index) p.isCorrect = false;
+        });
+    }
+
+    detachQuestionFromEx(question: Question) {
+        if (!this.selectedExerciceForQuestion) return;
+
+        const exId = this.selectedExerciceForQuestion.id;
+
+        this.confirmationService.confirm({
+            message: `Êtes-vous sûr de vouloir détacher cette question de l'exercice "${this.selectedExerciceForQuestion.titre}" ?`,
+            header: 'Confirmer le détachement',
+            icon: 'pi pi-exclamation-triangle',
+            accept: async () => {
+                try {
+                    // Filter out this exercice ID from the question's list
+                    const finalExIds = (question.exerciceIds || []).filter(id => id !== exId);
+
+                    // Update the question association
+                    await this.questionService.updateQuestion({ ...question, exerciceIds: finalExIds });
+
+                    // Decrement questionCount for this specific exercice
+                    const ex = this.exercices().find(e => e.id === exId);
+                    if (ex) {
+                        const currentCount = ex.questionCount || 0;
+                        await this.exerciceService.updateExercice({
+                            ...ex,
+                            questionCount: Math.max(0, currentCount - 1)
+                        });
+                    }
+
+                    // Refresh local list in the view dialog
+                    this.associatedQuestions = this.questionService.getQuestionsByExercice(exId);
+
+                    this.messageService.add({ severity: 'success', summary: 'Succès', detail: 'Question détachée avec succès', life: 3000 });
+                } catch (err) {
+                    this.messageService.add({ severity: 'error', summary: 'Erreur', detail: 'Échec du détachement' });
+                }
+            }
         });
     }
 
