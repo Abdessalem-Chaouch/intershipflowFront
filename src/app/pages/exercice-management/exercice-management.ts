@@ -101,13 +101,26 @@ import { QuestionService, Question } from '@/app/services/question.service';
                     </td>
                     <td>
                         <div class="flex items-center gap-2">
-                             <p-tag [value]="(exercice.questionCount || 0) + ' questions'" severity="info" class="cursor-pointer hover:opacity-80 transition-opacity" (click)="viewQuestionsSimple(exercice)" />
-                             <p-button icon="pi pi-plus" pTooltip="Ajouter une question" [rounded]="true" [text]="true" size="small" [style]="{'color':'#063970'}" (click)="openQuickAddQuestion(exercice)" />
+                             <p-button icon="pi pi-plus" pTooltip="Ajouter une question" [rounded]="true" [text]="true" size="small" [style]="{'color':'#C0C0C0'}" (click)="openQuickAddQuestion(exercice)" />
+                             <button 
+                            pButton
+                            type="button"
+                            class="p-button p-button-outlined p-button-secondary flex items-center gap-2"
+                            (click)="viewQuestionsSimple(exercice)"
+                            pTooltip="Consulter les questions associées"
+                            size="small"
+                            tooltipPosition="top">
+
+                            <i class="fa-brands fa-quora"></i>
+                            <span>{{ exercice.questionCount || 0 }}</span>
+                            <span>questions</span>
+
+                            </button>
                         </div>
                     </td>
                     <td>
                         <div class="flex gap-2">
-                            <p-button icon="pi pi-eye" [rounded]="true" [outlined]="true" (click)="viewQuestionsPreview(exercice)" [style]="{'color':'#063970', 'border-color':'#063970'}" pTooltip="Voir l'aperçu et ordonner" />
+                            <p-button icon="pi pi-eye" [rounded]="true" [outlined]="true" (click)="viewQuestionsPreview(exercice)" [style]="{'color':'#063970', 'border-color':'#063970'}" pTooltip="Voir les détails de l'exercice" />
                             <p-button icon="pi pi-pencil" [rounded]="true" [outlined]="true" (click)="editExercice(exercice)" />
                             <p-button icon="pi pi-trash" severity="danger" [rounded]="true" [outlined]="true" (click)="deleteExercice(exercice)" />
                         </div>
@@ -322,36 +335,40 @@ import { QuestionService, Question } from '@/app/services/question.service';
 
         </p-dialog>
 
-        <!-- 2. MODE PREVIEW ET CLASSEMENT -->
-        <p-dialog [(visible)]="viewQuestionsPreviewDialog" [style]="{ width: '750px' }" header="Aperçu et Ordonnancement" [modal]="true">
-            <!-- Used CSS to hide reorder controls as property name varies by version -->
-            <p-orderlist [value]="associatedQuestions" [dragdrop]="true" styleClass="w-full hide-reorder-controls" [listStyle]="{ 'width': '100%', 'max-height': '70vh', 'overflow-y': 'auto' }" header="Organisez l'ordre des questions">
-                <ng-template #item let-q let-i="index">
-                    <div class="flex flex-col gap-2 p-4 border border-slate-100 rounded-2xl bg-white mb-2 shadow-sm cursor-move hover:border-blue-200 transition-all min-h-[160px] w-full relative">
-                        <div class="flex items-center justify-between shrink-0">
-                            <div class="flex items-center gap-2">
-                                <span class="bg-[#063970] text-white text-[9px] font-black px-2 py-0.5 rounded-full">#{{ i + 1 }}</span>
-                                <p-tag [value]="q.typeQuestion" severity="secondary" [style]="{'font-size': '10px'}" />
-                            </div>
-                            <i class="pi pi-bars text-slate-300"></i>
-                        </div>
-                        <h4 class="font-bold text-slate-800 text-sm leading-tight shrink-0">{{ q.enonce }}</h4>
-                        
-                        <!-- Mini Preview Props -->
-                        <div class="flex flex-col gap-1 pl-4 border-l-2 border-slate-50 mt-1">
-                             <div *ngFor="let p of q.propositions" class="text-[11px] flex items-center gap-1">
-                                <i *ngIf="q.reponsesCorrectes?.includes(p)" class="pi pi-check text-green-500"></i>
-                                <i *ngIf="!q.reponsesCorrectes?.includes(p)" class="pi pi-circle text-slate-200"></i>
-                                <span [class.text-green-700]="q.reponsesCorrectes?.includes(p)">{{ p }}</span>
-                             </div>
+        <!-- 2. MODE PREVIEW ET DETAILS -->
+        <p-dialog [(visible)]="viewQuestionsPreviewDialog" [style]="{ width: '750px' }" header="Détails de l'exercice" [modal]="true">
+            <div class="mb-5 p-4 bg-slate-50 rounded-xl border border-slate-100">
+                <h3 class="text-xl font-bold text-slate-800 m-0 mb-3">{{ selectedExerciceForQuestion?.titre }}</h3>
+                <div class="flex items-center gap-2">
+                    <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Tests associés:</span>
+                    <p-tag *ngFor="let testName of getTestNames(selectedExerciceForQuestion?.testIds)" [value]="testName" severity="secondary" styleClass="text-[10px]" />
+                    <span *ngIf="!selectedExerciceForQuestion?.testIds?.length" class="text-xs text-slate-400 italic">Aucun</span>
+                </div>
+            </div>
+
+            <div class="flex flex-col gap-3" style="max-height: 60vh; overflow-y: auto;">
+                <div *ngFor="let q of associatedQuestions; let i = index" class="flex flex-col gap-2 p-4 border border-slate-100 rounded-2xl bg-white shadow-sm relative">
+                    <div class="flex items-center justify-between shrink-0 mb-2">
+                        <div class="flex items-center gap-2">
+                            <span class="bg-[#063970] text-white text-[9px] font-black px-2 py-0.5 rounded-full">#{{ i + 1 }}</span>
+                            <p-tag [value]="q.typeQuestion" severity="secondary" [style]="{'font-size': '10px'}" />
                         </div>
                     </div>
-                </ng-template>
-            </p-orderlist>
-            
-            <div class="mt-4 bg-orange-50 p-3 rounded-xl border border-orange-100 flex items-center gap-2 text-xs text-orange-700">
-                <i class="pi pi-info-circle"></i>
-                <span>Utilisez le Drag & Drop (glisser-déposer) pour organiser vos questions.</span>
+                    <h4 class="font-bold text-slate-800 text-sm leading-tight shrink-0 mb-2">{{ q.enonce }}</h4>
+                    
+                    <!-- Mini Preview Props -->
+                    <div class="flex flex-col gap-1.5 pl-4 border-l-2 border-slate-100">
+                         <div *ngFor="let p of q.propositions" class="text-[11px] flex items-center gap-2">
+                            <i *ngIf="q.reponsesCorrectes?.includes(p)" class="pi pi-check-circle text-green-500 text-[14px]"></i>
+                            <i *ngIf="!q.reponsesCorrectes?.includes(p)" class="pi pi-circle text-slate-300 text-[14px]"></i>
+                            <span [class.text-green-700]="q.reponsesCorrectes?.includes(p)" [class.font-bold]="q.reponsesCorrectes?.includes(p)" class="text-xs">{{ p }}</span>
+                         </div>
+                    </div>
+                </div>
+                
+                <div *ngIf="!associatedQuestions?.length" class="text-center p-6 bg-slate-50 rounded-xl border border-dashed border-slate-200 text-slate-400 font-medium italic">
+                    Aucune question associée à cet exercice.
+                </div>
             </div>
 
             <ng-template #footer>

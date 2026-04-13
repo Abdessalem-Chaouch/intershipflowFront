@@ -1,4 +1,4 @@
-import { Component, OnInit, signal } from '@angular/core';
+import { Component, OnInit, signal, ChangeDetectorRef, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TableModule } from 'primeng/table';
@@ -12,11 +12,14 @@ import { SelectModule } from 'primeng/select';
 import { DialogModule } from 'primeng/dialog';
 import { ToastModule } from 'primeng/toast';
 import { TooltipModule } from 'primeng/tooltip';
-import { MessageService } from 'primeng/api';
+import { ConfirmDialogModule } from 'primeng/confirmdialog';
+import { MessageService, ConfirmationService } from 'primeng/api';
 import { InternshipApplication, InternshipService, InternshipOffer } from '../../services/internship.service';
 import { User, UserService } from '../../services/user.service';
 import { CandidatureService, CandidatureResponseDto } from '../../services/candidature.service';
-import { AffectationService } from '../../services/affectation.service';
+import { AffectationService, EncadrantDTO } from '../../services/affectation.service';
+import { TestAttemptService, TestAttemptResponse } from '../../services/test-attempt.service';
+import { DocumentStageService } from '../../services/document-stage.service';
 
 @Component({
     selector: 'app-application-management',
@@ -34,9 +37,10 @@ import { AffectationService } from '../../services/affectation.service';
         ToastModule,
         TooltipModule,
         SelectModule,
-        DialogModule
+        DialogModule,
+        ConfirmDialogModule
     ],
-    providers: [MessageService, UserService, CandidatureService, AffectationService],
+    providers: [MessageService, ConfirmationService, UserService, CandidatureService, AffectationService, TestAttemptService, DocumentStageService],
     template: `
         <div class="card border-none shadow-sm overflow-hidden bg-slate-50/50">
             <p-toolbar styleClass="bg-white border-b border-slate-100 rounded-none mb-0 px-6 py-4">
@@ -101,9 +105,12 @@ import { AffectationService } from '../../services/affectation.service';
                         <th class="text-slate-500 text-[11px] font-bold uppercase tracking-widest py-4">Documents</th>
                         <th pSortableColumn="iaScore" class="text-slate-500 text-[11px] font-bold uppercase tracking-widest py-4 text-center">Score IA <p-sortIcon field="iaScore" /></th>
                         <th pSortableColumn="iaApproved" class="text-slate-500 text-[11px] font-bold uppercase tracking-widest py-4 text-center">IA Approval <p-sortIcon field="iaApproved" /></th>
+                        <th class="text-slate-500 text-[11px] font-bold uppercase tracking-widest py-4 text-center">Score Test</th>
+                        <th class="text-slate-500 text-[11px] font-bold uppercase tracking-widest py-4 text-center">Résultat Test</th>
                         <th pSortableColumn="encadrantId" class="text-slate-500 text-[11px] font-bold uppercase tracking-widest py-4 text-center">Encadrant <p-sortIcon field="encadrantId" /></th>
                         <th pSortableColumn="status" class="text-slate-500 text-[11px] font-bold uppercase tracking-widest py-4 text-center">Statut <p-sortIcon field="status" /></th>
-                        <th class="text-slate-500 text-[11px] font-bold uppercase tracking-widest py-4 text-center">Actions</th>
+                        <th class="text-slate-500 text-[11px] font-bold uppercase tracking-widest py-4 text-center ">Actions</th>
+                        <th class="text-slate-500 text-[11px] font-bold uppercase tracking-widest py-4 text-center">Supprimer</th>
                     </tr>
                 </ng-template>
                 <ng-template #body let-app>
@@ -126,8 +133,16 @@ import { AffectationService } from '../../services/affectation.service';
                         </td>
                         <td>
                             <div class="flex gap-1">
-                                <p-button icon="pi pi-file-pdf" [rounded]="true" [text]="true" severity="info" size="small" [pTooltip]="'Voir CV: ' + app.cvName" tooltipPosition="bottom" />
-                                <p-button icon="pi pi-envelope" [rounded]="true" [text]="true" severity="secondary" size="small" [pTooltip]="'Lettre: ' + app.letterName" tooltipPosition="bottom" />
+                                <p-button icon="pi pi-file-pdf" [rounded]="true" [text]="true" severity="info" size="small"
+                                    [pTooltip]="app.cvName && app.cvName !== 'N/A' ? 'Télécharger: ' + app.cvName : 'CV non disponible'"
+                                    tooltipPosition="bottom"
+                                    [disabled]="!app.cvNodeId"
+                                    (onClick)="downloadDocument(app.cvNodeId!, app.cvName)" />
+                                <p-button icon="pi pi-envelope" [rounded]="true" [text]="true" severity="secondary" size="small"
+                                    [pTooltip]="app.letterName && app.letterName !== 'N/A' ? 'Télécharger: ' + app.letterName : 'Lettre non disponible'"
+                                    tooltipPosition="bottom"
+                                    [disabled]="!app.lettreNodeId"
+                                    (onClick)="downloadDocument(app.lettreNodeId!, app.letterName)" />
                             </div>
                         </td>
                         <td class="text-center">
@@ -140,14 +155,24 @@ import { AffectationService } from '../../services/affectation.service';
                             <i class="pi" [ngClass]="{'pi-check-circle text-green-500': app.iaApproved, 'pi-times-circle text-slate-300': !app.iaApproved}" style="font-size: 1.2rem"></i>
                         </td>
                         <td class="text-center">
+                            <div class="inline-flex items-center justify-center px-2 py-1 rounded bg-slate-100 border text-slate-700 font-bold text-xs" *ngIf="testScoresMap()[app.id]">
+                                {{ testScoresMap()[app.id] }}%
+                            </div>
+                            <span *ngIf="!testScoresMap()[app.id]" class="text-[10px] text-slate-300">N/A</span>
+                        </td>
+                        <td class="text-center">
+                            <p-button label="Voir" icon="pi pi-eye" [text]="true" size="small" (onClick)="showTestResults(app)" styleClass="text-xs" />
+                        </td>
+                        <td class="text-center">
                             <div class="flex flex-col items-center gap-1">
-                                <span class="text-xs font-bold text-slate-700 bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded border border-emerald-100" *ngIf="app.encadrantId">
-                                    <i class="pi pi-user mr-1 text-[10px]"></i> {{ getSupervisorName(app.encadrantId) }}
+                                <span class="text-xs font-bold text-slate-700 bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded border border-emerald-100 flex items-center" *ngIf="app.utilisateurId && encadrantMap[app.utilisateurId]">
+                                    <i class="pi pi-user mr-1 text-[10px]"></i> {{ encadrantMap[app.utilisateurId].encadrantNom }}
+                                    <p-button icon="pi pi-spin pi-cog" [text]="true" [rounded]="true" size="small" pTooltip="Gérer l'affectation" tooltipPosition="top" (onClick)="openAssignDialog(app)" styleClass="ml-1 w-5 h-5 p-0" />
                                 </span>
-                                <p-button *ngIf="app.status === 'ACCEPTEE' && !app.encadrantId" 
+                                <p-button *ngIf="app.status === 'ACCEPTEE' && (!app.utilisateurId || !encadrantMap[app.utilisateurId])" 
                                     label="Affecter" icon="pi pi-plus-circle" [text]="true" size="small" 
                                     styleClass="text-[10px] font-bold text-orange-600 p-0" (onClick)="openAssignDialog(app)" />
-                                <span *ngIf="app.status !== 'ACCEPTEE' && !app.encadrantId" class="text-[10px] text-slate-300 italic">Non spécifié</span>
+                                <span *ngIf="app.status !== 'ACCEPTEE' && (!app.utilisateurId || !encadrantMap[app.utilisateurId])" class="text-[10px] text-slate-300 italic">Non spécifié</span>
                             </div>
                         </td>
                         <td class="text-center">
@@ -158,7 +183,11 @@ import { AffectationService } from '../../services/affectation.service';
                                 <p-button icon="pi pi-check" [rounded]="true" [text]="true" severity="success" (onClick)="updateStatus(app, 'ACCEPTEE')" pTooltip="Accepter" tooltipPosition="left" />
                                 <p-button icon="pi pi-times" [rounded]="true" [text]="true" severity="danger" (onClick)="updateStatus(app, 'REFUSEE')" pTooltip="Refuser" tooltipPosition="left" />
                                 <p-button icon="pi pi-clock" [rounded]="true" [text]="true" severity="warn" (onClick)="updateStatus(app, 'EN_ATTENTE')" pTooltip="Mettre en attente" tooltipPosition="left" />
+                            
                             </div>
+                        </td>
+                        <td class="text-center">
+                            <p-button icon="pi pi-trash" [rounded]="true" [text]="true" severity="danger" (onClick)="confirmDelete(app)" pTooltip="Supprimer" tooltipPosition="center" />
                         </td>
                     </tr>
                 </ng-template>
@@ -166,11 +195,29 @@ import { AffectationService } from '../../services/affectation.service';
         </div>
 
         <!-- Dialog d'affectation d'encadrant -->
-        <p-dialog [(visible)]="assignmentDialog" [style]="{width: '450px'}" header="Affecter un Encadrant" [modal]="true" styleClass="p-fluid">
+        <p-dialog [(visible)]="assignmentDialog" [style]="{width: '450px'}" header="Affectation Encadrant" [modal]="true" styleClass="p-fluid">
             <ng-template #content>
                 <div class="flex flex-col gap-4 py-2">
-                    <div class="flex flex-col gap-2">
-                        <label for="supervisor" class="text-sm font-bold text-slate-700">Choisir l'encadrant</label>
+                    <div class="p-4 bg-blue-50 rounded-xl border border-blue-100 mb-2">
+                        <div class="flex flex-col">
+                            <span class="text-xs text-blue-600 font-bold uppercase tracking-wider">Candidat :</span>
+                            <span class="font-black text-slate-800 text-lg">{{selectedApp?.firstName}} {{selectedApp?.lastName}}</span>
+                        </div>
+                    </div>
+
+                    <div *ngIf="assignedEncadrantDTO" class="flex flex-col gap-3 animate-fadein">
+                        <label class="text-sm font-bold text-slate-700">Encadrant Actuel</label>
+                        <div class="flex items-center justify-between p-3 bg-white border border-green-200 rounded-xl">
+                            <div class="flex items-center gap-3">
+                                <i class="pi pi-check-circle text-green-500 text-xl"></i>
+                                <span class="font-bold text-slate-800">{{ assignedEncadrantDTO.encadrantNom }}</span>
+                            </div>
+                            <p-button icon="pi pi-user-minus" severity="danger" [text]="true" pTooltip="Désaffecter" tooltipPosition="top" (onClick)="detachSupervisor()" />
+                        </div>
+                    </div>
+
+                    <div *ngIf="!assignedEncadrantDTO" class="flex flex-col gap-2 animate-fadein">
+                        <label for="supervisor" class="text-sm font-bold text-slate-700">Choisir un nouvel encadrant</label>
                         <p-select 
                             id="supervisor"
                             [options]="availableSupervisors" 
@@ -181,9 +228,6 @@ import { AffectationService } from '../../services/affectation.service';
                             appendTo="body"
                             styleClass="w-full border-slate-200">
                         </p-select>
-                        <small class="text-slate-400" *ngIf="selectedApp">
-                            Affectation pour: <span class="font-bold">{{selectedApp.firstName}} {{selectedApp.lastName}}</span>
-                        </small>
                     </div>
                 </div>
             </ng-template>
@@ -191,11 +235,118 @@ import { AffectationService } from '../../services/affectation.service';
             <ng-template #footer>
                 <div class="flex justify-end gap-2 p-4 border-t border-slate-50">
                     <p-button label="Annuler" icon="pi pi-times" [text]="true" severity="secondary" (onClick)="assignmentDialog = false" />
-                    <p-button label="Confirmer l'affectation" icon="pi pi-check" (onClick)="confirmAssignment()" [disabled]="!selectedSupervisorId" [loading]="loading()" />
+                    <p-button *ngIf="!assignedEncadrantDTO" label="Confirmer l'affectation" icon="pi pi-check" (onClick)="confirmAssignment()" [disabled]="!selectedSupervisorId" [loading]="loading()" />
                 </div>
             </ng-template>
         </p-dialog>
 
+        <!-- Dialog des resultats de test -->
+        <p-dialog [(visible)]="testResultsDialog" [style]="{width: '800px'}" header="Resultats des Tests" [modal]="true" [draggable]="false">
+            <div class="flex flex-col gap-0" style="max-height: 78vh; overflow-y: auto; padding: 0.25rem;">
+
+                <!-- Candidate info banner -->
+                <div *ngIf="selectedAppForTest" class="flex items-center gap-4 p-4 bg-gradient-to-r from-[#063970] to-[#1e4b8a] text-white rounded-xl mb-4">
+                    <div class="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center font-black text-sm border border-white/20">
+                        {{selectedAppForTest.firstName.charAt(0)}}{{selectedAppForTest.lastName.charAt(0)}}
+                    </div>
+                    <div class="flex flex-col">
+                        <span class="font-black text-base">{{selectedAppForTest.firstName}} {{selectedAppForTest.lastName}}</span>
+                        <span class="text-blue-200 text-xs font-medium">{{selectedAppForTest.offerTitle}}</span>
+                    </div>
+                </div>
+
+                <!-- No results -->
+                <div *ngIf="selectedTestResults.length === 0" class="flex flex-col items-center justify-center py-16 gap-3 text-slate-400">
+                    <i class="pi pi-file-edit text-4xl"></i>
+                    <p class="text-sm font-medium">Aucun test passe pour cette candidature</p>
+                </div>
+
+                <!-- Attempt cards -->
+                <div *ngFor="let attempt of selectedTestResults; let ai = index" class="mb-6 rounded-2xl border border-slate-100 overflow-hidden shadow-sm">
+
+                    <!-- Attempt summary header -->
+                    <div class="flex flex-wrap items-center justify-between gap-3 px-5 py-4 bg-slate-50 border-b border-slate-100">
+                        <div class="flex items-center gap-3">
+                            <div class="w-7 h-7 rounded-full bg-[#063970] text-white flex items-center justify-center text-[10px] font-black">{{ai + 1}}</div>
+                            <div class="flex flex-col">
+                                <span class="text-xs font-black text-slate-600 uppercase tracking-wider">Tentative {{ai + 1}}</span>
+                                <span class="text-[11px] text-slate-400 font-medium">
+                                    <i class="pi pi-clock mr-1"></i>{{attempt.datePassage | date:'dd/MM/yyyy HH:mm:ss'}}
+                                </span>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-4">
+                            <div class="flex flex-col items-center">
+                                <span class="text-[9px] text-slate-400 font-black uppercase tracking-wider">Score</span>
+                                <span class="text-2xl font-black leading-none" [ngStyle]="{'color': getScoreColor(attempt.score)}">{{attempt.score}}%</span>
+                            </div>
+                            <p-tag [severity]="attempt.passed ? 'success' : 'danger'"
+                                   [value]="attempt.passed ? 'REUSSI' : 'ECHOUE'"
+                                   styleClass="font-black px-3 py-1 rounded-xl text-xs" />
+                        </div>
+                    </div>
+
+                    <!-- Questions detail -->
+                    <div class="divide-y divide-slate-50 bg-white">
+                        <div *ngFor="let rep of attempt.reponses; let qi = index" class="px-5 py-4">
+                            <div class="flex items-start gap-3">
+                                <!-- Correct/wrong dot -->
+                                <div class="flex-none mt-0.5 w-6 h-6 rounded-full flex items-center justify-center font-black"
+                                     [ngClass]="rep.correcte ? 'bg-emerald-100 text-emerald-600' : 'bg-red-100 text-red-500'">
+                                    <i class="pi" [ngClass]="rep.correcte ? 'pi-check' : 'pi-times'" style="font-size:0.6rem"></i>
+                                </div>
+                                <div class="flex-1 min-w-0">
+                                    <!-- Question text -->
+                                    <p class="m-0 text-sm font-bold text-slate-800 mb-3">Q{{qi + 1}}. {{rep.questionText}}</p>
+
+                                    <!-- Propositions -->
+                                    <div *ngIf="rep.propositions.length" class="flex flex-col gap-1.5 mb-3">
+                                        <div *ngFor="let prop of rep.propositions"
+                                             class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium border"
+                                             [ngClass]="rep.bonnesReponses.includes(prop) && rep.reponsesDonnees.includes(prop) ? 'bg-emerald-50 border-emerald-200 text-emerald-700' :
+                                                        (!rep.bonnesReponses.includes(prop) && rep.reponsesDonnees.includes(prop)) ? 'bg-red-50 border-red-200 text-red-600' :
+                                                        (rep.bonnesReponses.includes(prop) && !rep.reponsesDonnees.includes(prop)) ? 'bg-emerald-50/50 border-emerald-100 text-emerald-500' :
+                                                        'bg-white border-slate-100 text-slate-500'">
+                                            <i class="pi text-[10px]"
+                                               [ngClass]="rep.bonnesReponses.includes(prop) ? 'pi-check-circle' :
+                                                          (rep.reponsesDonnees.includes(prop) ? 'pi-times-circle' : 'pi-circle')"></i>
+                                            <span class="flex-1">{{prop}}</span>
+                                            <span *ngIf="rep.reponsesDonnees.includes(prop)" class="font-black text-[9px] uppercase tracking-wider opacity-60">Ma reponse</span>
+                                            <span *ngIf="rep.bonnesReponses.includes(prop)" class="font-black text-[9px] uppercase tracking-wider text-emerald-600">Correcte</span>
+                                        </div>
+                                    </div>
+
+                                    <!-- Free text answer -->
+                                    <div *ngIf="!rep.propositions.length" class="flex flex-col gap-2 mb-3">
+                                        <div class="px-3 py-2 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-700">
+                                            <span class="text-[9px] font-black text-slate-400 uppercase tracking-wider block mb-1">Reponse donnee</span>
+                                            {{rep.reponsesDonnees.join(', ') || '(vide)'}}
+                                        </div>
+                                        <div *ngIf="rep.bonnesReponses.length" class="px-3 py-2 rounded-lg bg-emerald-50 border border-emerald-200 text-xs text-emerald-700">
+                                            <span class="text-[9px] font-black text-emerald-600 uppercase tracking-wider block mb-1">Bonne reponse</span>
+                                            {{rep.bonnesReponses.join(', ')}}
+                                        </div>
+                                    </div>
+
+                                    <!-- Correctness badge -->
+                                    <span class="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full"
+                                          [ngClass]="rep.correcte ? 'bg-emerald-100 text-emerald-600' : 'bg-red-100 text-red-500'">
+                                        <i class="pi" [ngClass]="rep.correcte ? 'pi-check' : 'pi-times'" style="font-size:0.55rem"></i>
+                                        {{rep.correcte ? 'Correct' : 'Incorrect'}}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+            <ng-template #footer>
+                <p-button label="Fermer" icon="pi pi-times" (onClick)="testResultsDialog = false" [outlined]="true" />
+            </ng-template>
+        </p-dialog>
+
+        <p-confirmDialog />
         <p-toast />
     `
 })
@@ -210,13 +361,26 @@ export class ApplicationManagement implements OnInit {
     availableSupervisors: any[] = [];
     selectedSupervisorId: string | null = null;
     allUsers: User[] = [];
+    assignedEncadrantDTO: EncadrantDTO | null = null;
+    encadrantMap: { [utilisateurId: string]: EncadrantDTO } = {};
+
+    // Test Results
+    testResultsDialog: boolean = false;
+    selectedTestResults: TestAttemptResponse[] = [];
+    selectedAppForTest: InternshipApplication | null = null;
+    testScoresMap = signal<{[key: string]: number}>({});
+
+    private cdr = inject(ChangeDetectorRef);
 
     constructor(
         public internshipService: InternshipService,
         private userService: UserService,
         private candidatureService: CandidatureService,
         private affectationService: AffectationService,
-        private messageService: MessageService
+        private testAttemptService: TestAttemptService,
+        private documentStageService: DocumentStageService,
+        private messageService: MessageService,
+        private confirmationService: ConfirmationService
     ) {}
 
     loading = signal<boolean>(false);
@@ -249,6 +413,34 @@ export class ApplicationManagement implements OnInit {
             
             const mapped = dtos.map(dto => this.mapToInternshipApplication(dto));
             this.applications.set(mapped);
+            
+            // Fetch test scores and encadrants safely
+            const scores: {[key: string]: number} = {};
+            const newEncadrantMap = { ...this.encadrantMap };
+            
+            await Promise.allSettled(mapped.map(async (app) => {
+                try {
+                    const results = await this.testAttemptService.getByCandidature(parseInt(app.id));
+                    if (results && results.length > 0) {
+                        const latest = results.reduce((prev: any, current: any) => (prev.id > current.id) ? prev : current);
+                        scores[app.id] = latest.score;
+                    }
+                } catch (e) {
+                    console.warn(`Could not fetch test results for candidature ${app.id}`);
+                }
+                
+                if (app.utilisateurId) {
+                    try {
+                        const enc = await this.affectationService.getEncadrant(app.utilisateurId);
+                        if (enc) newEncadrantMap[app.utilisateurId] = enc;
+                    } catch (e) {}
+                }
+            }));
+            
+            this.testScoresMap.set(scores);
+            setTimeout(() => {
+                this.encadrantMap = newEncadrantMap;
+            });
         } catch (err) {
             console.error('Load Error Detail:', err);
             this.messageService.add({ severity: 'error', summary: 'Erreur', detail: 'Chargement des candidatures échoué' });
@@ -266,15 +458,22 @@ export class ApplicationManagement implements OnInit {
             offerTitle: offer ? offer.title : (dto.offreStageId ? `Offre #${dto.offreStageId}` : 'Offre inconnue'),
             firstName: dto.prenom || 'N/A',
             lastName: dto.nom || 'N/A',
-            cvName: dto.cvNodeId || 'N/A',
-            letterName: dto.lettreMotivationNodeId || 'N/A',
+            cvName: dto.cvName || dto.cvNodeId || 'N/A',
+            cvNodeId: dto.cvNodeId || '',
+            letterName: dto.lettreMotivationName || dto.lettreMotivationNodeId || 'N/A',
+            lettreNodeId: dto.lettreMotivationNodeId || '',
             status: (dto.etat === 'ACCEPTEE' || dto.etat === 'REFUSEE' || dto.etat === 'EN_ATTENTE') ? dto.etat as any : 'EN_ATTENTE',
-            date: new Date(), 
+            date: new Date(),
             iaScore: dto.scoreAI,
             iaApproved: dto.approvedByAI,
             encadrantId: user ? user.encadrantId : undefined,
             utilisateurId: dto.utilisateurId?.toString()
         };
+    }
+
+    downloadDocument(nodeId: string, fileName: string) {
+        if (!nodeId || nodeId === 'N/A') return;
+        this.documentStageService.downloadFile(nodeId, fileName);
     }
 
     onGlobalFilter(table: any, event: Event) {
@@ -339,10 +538,57 @@ export class ApplicationManagement implements OnInit {
         }
     }
 
-    openAssignDialog(app: InternshipApplication) {
+    confirmDelete(app: InternshipApplication) {
+        this.confirmationService.confirm({
+            message: `Êtes-vous sûr de vouloir supprimer la candidature de ${app.firstName} ${app.lastName} ?`,
+            header: 'Confirmation de suppression',
+            icon: 'pi pi-info-circle',
+            accept: async () => {
+                this.loading.set(true);
+                try {
+                    await this.candidatureService.delete(parseInt(app.id));
+                    await this.loadApplications();
+                    this.messageService.add({ severity: 'success', summary: 'Succès', detail: 'Candidature supprimée avec succès' });
+                } catch (err) {
+                    console.error('Erreur lors de la suppression', err);
+                    this.messageService.add({ severity: 'error', summary: 'Erreur', detail: 'Échec de la suppression' });
+                } finally {
+                    this.loading.set(false);
+                }
+            }
+        });
+    }
+
+    async openAssignDialog(app: InternshipApplication) {
         this.selectedApp = app;
         this.selectedSupervisorId = null;
-        this.assignmentDialog = true;
+        this.assignedEncadrantDTO = null;
+
+        let enc = null;
+        if (app.utilisateurId) {
+            try {
+                enc = await this.affectationService.getEncadrant(app.utilisateurId);
+            } catch (err) {}
+        }
+
+        setTimeout(() => {
+            this.assignedEncadrantDTO = enc;
+            this.assignmentDialog = true;
+        });
+    }
+
+    async detachSupervisor() {
+        if (!this.selectedApp || !this.selectedApp.utilisateurId || !this.assignedEncadrantDTO) return;
+        try {
+            await this.affectationService.desaffecter(this.selectedApp.utilisateurId, this.assignedEncadrantDTO.encadrantId);
+            this.messageService.add({ severity: 'success', summary: 'Succès', detail: 'Désaffectation réussie', life: 3000 });
+            this.assignedEncadrantDTO = null;
+            if (this.selectedApp.utilisateurId) {
+                delete this.encadrantMap[this.selectedApp.utilisateurId];
+            }
+        } catch(err) {
+            this.messageService.add({ severity: 'error', summary: 'Erreur', detail: 'Erreur lors de la désaffectation', life: 3000 });
+        }
     }
 
     async confirmAssignment() {
@@ -362,10 +608,28 @@ export class ApplicationManagement implements OnInit {
                 summary: 'Affectation réussie',
                 detail: `L'encadrant a été affecté à ${this.selectedApp.firstName}.`
             });
+            
+            const enc = await this.affectationService.getEncadrant(stagiaireId);
+            if (enc) {
+                this.encadrantMap[stagiaireId] = enc;
+            }
             this.assignmentDialog = false;
-            this.loadApplications();
         } catch (err) {
             this.messageService.add({ severity: 'error', summary: 'Erreur', detail: "Échec de l'affectation" });
+        }
+    }
+
+    async showTestResults(app: InternshipApplication) {
+        this.selectedAppForTest = app;
+        this.selectedTestResults = [];
+        this.loading.set(true);
+        try {
+            this.selectedTestResults = await this.testAttemptService.getByCandidature(parseInt(app.id));
+            this.testResultsDialog = true;
+        } catch (err) {
+            this.messageService.add({ severity: 'error', summary: 'Erreur', detail: 'Impossible de récupérer les résultats' });
+        } finally {
+            this.loading.set(false);
         }
     }
 }

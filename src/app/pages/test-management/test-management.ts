@@ -26,6 +26,7 @@ import { ExerciceService, Exercice } from '@/app/services/exercice.service';
 import { QuestionService, Question } from '@/app/services/question.service';
 import { TooltipModule } from 'primeng/tooltip';
 import { MultiSelectModule } from 'primeng/multiselect';
+import { TestAttemptService, TestAttemptResponse } from '@/app/services/test-attempt.service';
 
 interface QuestionPrep {
     tempId: string;
@@ -95,6 +96,7 @@ interface ExercicePrep {
                     <th pSortableColumn="offerIds">Offres associées <p-sortIcon field="offerIds" /></th>
                     <th pSortableColumn="dureeMinutes">Durée (min) <p-sortIcon field="dureeMinutes" /></th>
                     <th style="min-width:8rem">Exercices</th>
+                    <th style="min-width:10rem">Tentatives de test</th>
                     <th style="min-width:10rem">Actions</th>
                 </tr>
             </ng-template>
@@ -111,9 +113,26 @@ interface ExercicePrep {
                     <td>{{ test.dureeMinutes }} min</td>
                     <td>
                         <div class="flex items-center gap-2">
-                            <p-tag [value]="(test.exerciceCount || 0) + ' exercices'" severity="info" class="cursor-pointer hover:opacity-80 transition-opacity" (click)="viewExercices(test)" />
-                            <p-button icon="pi pi-plus" pTooltip="Ajouter un exercice" tooltipPosition="top" [rounded]="true" [text]="true" size="small" [style]="{'color':'#063970'}" (click)="openQuickAddExercice(test)" />
+                            
+                            <p-button icon="pi pi-plus" pTooltip="Ajouter un exercice" tooltipPosition="top" [rounded]="true" [text]="true" size="small" [style]="{'color':'#C0C0C0'}" (click)="openQuickAddExercice(test)" />
+                            <button 
+                            pButton
+                            type="button"
+                            class="p-button p-button-outlined p-button-secondary flex items-center gap-2"
+                            (click)="viewExercices(test)"
+                            pTooltip="Consulter les exercices associés"
+                            size="small"
+                            tooltipPosition="top">
+
+                            <i class="fa-regular fa-rectangle-list"></i>
+                            <span>{{ test.exerciceCount || 0 }}</span>
+                            <span>exercices</span>
+
+                            </button>
                         </div>
+                    </td>
+                    <td>
+                        <p-button icon="pi pi-users" label="Tentatives" pTooltip="Consulter les tentatives" tooltipPosition="top" size="small" [outlined]="true" severity="secondary" (click)="viewAttempts(test)" />
                     </td>
                     <td>
                         <div class="flex items-center gap-2">
@@ -705,6 +724,90 @@ interface ExercicePrep {
             [test]="selectedTestForExercice" 
             (onClosePreview)="previewDialog = false" />
 
+        <!-- Vue Tentatives de test -->
+        <p-dialog [(visible)]="viewAttemptsDialog" [style]="{'width':'900px', 'max-width':'95vw'}"
+            [header]="'Tentatives pour le test – ' + (selectedTestForAttempts?.titre || '')" [modal]="true" [draggable]="false">
+            
+            <div class="flex flex-col gap-4 mt-2">
+                <div *ngIf="currentTestAttempts.length === 0" 
+                    class="text-center py-12 rounded-xl border-2 border-dashed border-gray-200 bg-gray-50">
+                    <i class="pi pi-inbox text-4xl text-gray-300 mb-3"></i>
+                    <div class="text-gray-500 font-medium">Aucune tentative trouvée pour ce test.</div>
+                </div>
+
+                <div *ngFor="let attempt of currentTestAttempts; let i=index" 
+                    class="rounded-xl border border-gray-200 overflow-hidden shadow-sm bg-white mb-4">
+                    <div class="flex items-center justify-between gap-3 p-4 select-none bg-gray-50 border-b border-gray-100">
+                        <div class="flex items-center gap-3">
+                            <div class="flex items-center justify-center w-8 h-8 rounded-full text-white text-sm font-bold shrink-0 shadow-sm"
+                                style="background:#063970">{{ i + 1 }}</div>
+                            <div>
+                                <div class="font-bold text-gray-800 text-sm">Candidat N° {{ attempt.candidatureId }}</div>
+                                <div class="text-[10px] font-bold text-gray-400 tracking-wider mt-0.5">
+                                    <i class="pi pi-calendar text-[9px] mr-1"></i>{{ attempt.datePassage | date:'longDate' }} à {{ attempt.datePassage | date:'shortTime' }}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-4 bg-white px-4 py-2 rounded-lg border border-gray-100 shadow-sm">
+                            <div class="flex flex-col">
+                                <span class="text-[9px] font-black text-gray-400 uppercase tracking-widest leading-none">Score</span>
+                                <span class="text-lg font-black leading-none mt-1" [ngClass]="attempt.passed ? 'text-green-600' : 'text-red-500'">
+                                    {{ attempt.score }}%
+                                </span>
+                            </div>
+                            <div class="h-8 w-px bg-gray-200"></div>
+                            <p-tag [value]="attempt.passed ? 'Admis' : 'Non Admis'" [severity]="attempt.passed ? 'success' : 'danger'" styleClass="px-3 py-1 text-[10px] uppercase font-black tracking-widest shadow-sm" />
+                        </div>
+                    </div>
+                    
+                    <div class="p-5 bg-white" *ngIf="attempt.reponses && attempt.reponses.length > 0">
+                        <h6 class="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                            <i class="pi pi-list text-gray-300"></i>Détails des questions
+                        </h6>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div *ngFor="let rep of attempt.reponses; let rIdx=index" 
+                                 class="p-4 border rounded-xl transition-all duration-200"
+                                 [ngClass]="rep.correcte ? 'border-green-100 bg-green-50/30' : 'border-red-100 bg-red-50/30'">
+                                <div class="flex items-start gap-2.5 mb-3">
+                                    <div class="flex items-center justify-center w-5 h-5 rounded-md text-[10px] font-bold mt-0.5 shrink-0"
+                                         [ngClass]="rep.correcte ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'">
+                                        {{ rIdx + 1 }}
+                                    </div>
+                                    <div class="text-xs font-bold text-gray-800 leading-snug">{{ rep.questionText }}</div>
+                                </div>
+                                <div class="ml-7 flex flex-col gap-2">
+                                    <div class="flex flex-col gap-1">
+                                        <span class="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Réponse du candidat</span>
+                                        <div class="flex items-center gap-1.5">
+                                            <i *ngIf="rep.correcte" class="pi pi-check-circle text-green-500 text-sm"></i>
+                                            <i *ngIf="!rep.correcte" class="pi pi-times-circle text-red-500 text-sm"></i>
+                                            <span class="text-xs font-semibold" [ngClass]="rep.correcte ? 'text-green-700' : (rep.reponsesDonnees && rep.reponsesDonnees.length) ? 'text-red-600' : 'text-gray-400 italic'">
+                                                {{ rep.reponsesDonnees && rep.reponsesDonnees.length > 0 ? rep.reponsesDonnees.join(' · ') : 'Aucune réponse' }}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div *ngIf="!rep.correcte" class="flex flex-col gap-1 mt-1 pt-2 border-t"
+                                         [ngClass]="'border-red-100'">
+                                        <span class="text-[9px] font-bold text-red-400 uppercase tracking-wider">Réponse attendue</span>
+                                        <div class="flex items-center gap-1.5">
+                                            <i class="pi pi-check text-green-500 text-[10px]"></i>
+                                            <span class="text-xs font-bold text-green-600">
+                                                {{ rep.bonnesReponses.join(' · ') || 'N/A' }}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <ng-template #footer>
+                <p-button label="Fermer" icon="pi pi-times" [text]="true" size="small" [style]="{'color':'#063970'}" (click)="viewAttemptsDialog=false" />
+            </ng-template>
+        </p-dialog>
+
         <p-confirmDialog [style]="{'width':'450px'}" />
         <p-toast />
     `,
@@ -716,6 +819,7 @@ export class TestManagement implements OnInit {
     detailsDialog = false;
     exerciceDialog = false;
     viewExercicesDialog = false;
+    viewAttemptsDialog = false;
     previewDialog = false; // New preview state
     addExerciceDialog = false;
     addQuestionDialog = false;
@@ -723,6 +827,8 @@ export class TestManagement implements OnInit {
     removedQuestionIds: { [exTempId: string]: string[] } = {}; // Track questions removed per exercise prep
 
     // ─── Data signals ──────────────────────────────────
+    currentTestAttempts: TestAttemptResponse[] = [];
+    selectedTestForAttempts: TechnicalTest | null = null;
     tests: Signal<TechnicalTest[]>;
     offers: Signal<InternshipOffer[]>;
     exercices: Signal<Exercice[]>;
@@ -783,7 +889,8 @@ export class TestManagement implements OnInit {
         private questionService: QuestionService,
         private messageService: MessageService,
         private confirmationService: ConfirmationService,
-        private filterService: FilterService
+        private filterService: FilterService,
+        private testAttemptService: TestAttemptService
     ) {
         this.tests = this.testService.getTests();
         this.offers = this.internshipService.getOffers();
@@ -804,6 +911,17 @@ export class TestManagement implements OnInit {
     }
 
     // ─── Helpers ───────────────────────────────────────
+    async viewAttempts(test: TechnicalTest) {
+        this.selectedTestForAttempts = test;
+        this.currentTestAttempts = [];
+        this.viewAttemptsDialog = true;
+        try {
+            this.currentTestAttempts = await this.testAttemptService.getByTest(test.id as any);
+        } catch (error) {
+            this.messageService.add({ severity: 'error', summary: 'Erreur', detail: 'Impossible de charger les tentatives' });
+        }
+    }
+
     getOneOfferName(offerId: string): string {
         return this.offers().find(o => o.id === offerId)?.title ?? 'N/A';
     }

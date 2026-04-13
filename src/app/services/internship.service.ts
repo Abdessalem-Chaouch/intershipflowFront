@@ -8,7 +8,9 @@ export interface InternshipApplication {
     firstName: string;
     lastName: string;
     cvName: string;
+    cvNodeId?: string;
     letterName: string;
+    lettreNodeId?: string;
     status: 'EN_ATTENTE' | 'ACCEPTEE' | 'REFUSEE';
     date: Date;
     iaScore?: number;
@@ -32,7 +34,7 @@ export interface InternshipOffer {
     dateFin?: string | Date;
     competencesRequises?: string;
     testCount?: number;
-    testSelectionMode?: 'UN_CHOIX' | 'ALEATOIRE';
+    typeSelection?: string;
     selectedTestId?: string;
     candidateCount?: number;
 }
@@ -47,6 +49,9 @@ export interface OffreStageDTO {
     dateFin: string;
     nombreCandidatures: number;
     nombreTests: number;
+    typeSelection?: string;
+    selectedTestId?: number;
+    selectedTestTitre?: string;
 }
 
 @Injectable({
@@ -123,6 +128,8 @@ export class InternshipService {
             dateFin: dto.dateFin,
             testCount: dto.nombreTests,
             candidateCount: dto.nombreCandidatures,
+            typeSelection: dto.typeSelection,
+            selectedTestId: dto.selectedTestId?.toString(),
             badge: 'Ouvert',
             techs: (dto.competencesRequises || '').split(',').map(s => s.trim()).filter(s => s),
             highlight: false,
@@ -140,7 +147,9 @@ export class InternshipService {
             dateDebut: offer.dateDebut ? (typeof offer.dateDebut === 'string' ? offer.dateDebut : offer.dateDebut.toISOString().split('T')[0]) : '',
             dateFin: offer.dateFin ? (typeof offer.dateFin === 'string' ? offer.dateFin : offer.dateFin.toISOString().split('T')[0]) : '',
             nombreCandidatures: offer.candidateCount || 0,
-            nombreTests: offer.testCount || 0
+            nombreTests: offer.testCount || 0,
+            typeSelection: offer.typeSelection,
+            selectedTestId: offer.selectedTestId ? parseInt(offer.selectedTestId) : undefined
         };
     }
 
@@ -150,6 +159,16 @@ export class InternshipService {
 
     getOffers() {
         return this.offers;
+    }
+
+    async getOfferById(id: string): Promise<InternshipOffer> {
+        try {
+            const dto = await firstValueFrom(this.http.get<OffreStageDTO>(`${this.apiUrl}/${id}`));
+            return this.mapToInternshipOffer(dto);
+        } catch (err) {
+            console.error('Error fetching offer by id', err);
+            throw err;
+        }
     }
 
     apply(application: Omit<InternshipApplication, 'id' | 'status' | 'date'>) {
@@ -200,6 +219,24 @@ export class InternshipService {
             this.offers.update((offers) => offers.filter(o => o.id !== id));
         } catch (err) {
             console.error('Error deleting offer', err);
+            throw err;
+        }
+    }
+
+    async getRandomTest(id: string): Promise<any> {
+        try {
+            return await firstValueFrom(this.http.get<any>(`${this.apiUrl}/${id}/test-random`));
+        } catch (err) {
+            console.error('Error selecting random test', err);
+            throw err;
+        }
+    }
+
+    async chooseTest(offreId: string, testId: string): Promise<any> {
+        try {
+            return await firstValueFrom(this.http.post<any>(`${this.apiUrl}/${offreId}/choose-test/${testId}`, {}));
+        } catch (err) {
+            console.error('Error choosing manual test', err);
             throw err;
         }
     }

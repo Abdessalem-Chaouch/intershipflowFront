@@ -7,9 +7,11 @@ export interface CandidatureResponseDto {
     nom: string;
     prenom: string;
     cvNodeId: string;
+    cvName: string;
     lettreMotivationNodeId: string;
+    lettreMotivationName: string;
     etat: string;
-    utilisateurId: number;
+    utilisateurId: string;
     approvedByAI: boolean;
     scoreAI: number;
     offreStageId: number;
@@ -93,5 +95,9 @@ export class CandidatureService {
 
     async getById(id: number) {
         return firstValueFrom(this.http.get<CandidatureResponseDto>(`${this.apiUrl}/${id}`));
+    }
+
+    async getByOffre(offreId: number): Promise<CandidatureResponseDto[]> {
+        return firstValueFrom(this.http.get<CandidatureResponseDto[]>(`${this.apiUrl}/offre/${offreId}`));
     }
 }

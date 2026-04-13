@@ -1,4 +1,4 @@
-import { Component, OnInit, signal, ViewChild } from '@angular/core';
+import { Component, OnInit, signal, ViewChild, inject } from '@angular/core';
 import { ConfirmationService, MessageService } from 'primeng/api';
 import { Table, TableModule } from 'primeng/table';
 import { CommonModule } from '@angular/common';
@@ -16,6 +16,8 @@ import { IconFieldModule } from 'primeng/iconfield';
 import { ConfirmDialogModule } from 'primeng/confirmdialog';
 import { PasswordModule } from 'primeng/password';
 import { User, UserService } from '@/app/services/user.service';
+import { AffectationService, EncadrantDTO } from '@/app/services/affectation.service';
+import { Signal, computed } from '@angular/core';
 
 interface Column {
     field: string;
@@ -129,31 +131,24 @@ interface Intern {
                         <p-tag [value]="user.role" [severity]="getSeverity(user.role)" />
                     </td>
 
-                    <!-- Dynamic Cells based on Role Filter -->
                     <td *ngIf="selectedRole === 'Stagiaire'">
                         <div class="flex items-center gap-2">
-                            <ng-container *ngIf="user.encadrantId; else noSupervisor">
+                            <ng-container *ngIf="user.id && encadrantMap[user.id]; else noSupervisor">
                                 <i class="pi pi-user text-blue-500"></i>
-                                <span class="font-bold text-slate-700">{{ getSupervisorName(user.encadrantId) }}</span>
+                                <span class="font-bold text-slate-700">{{ encadrantMap[user.id].encadrantNom }}</span>
+                                <p-button icon="pi pi-spin pi-cog" [text]="true" [rounded]="true" size="small" pTooltip="Gérer l'affectation" tooltipPosition="top" (onClick)="viewEncadrant(user)" />
                             </ng-container>
                             <ng-template #noSupervisor>
                                 <p-button label="Affecter" icon="pi pi-user-plus" [text]="true" size="small" 
                                     styleClass="text-xs font-bold text-orange-600 hover:bg-orange-50 py-1" 
-                                    (onClick)="openAssignSupervisor(user)" />
+                                    (onClick)="viewEncadrant(user)" />
                             </ng-template>
                         </div>
                     </td>
                     <td *ngIf="selectedRole === 'Encadrant'">
-                        <div class="flex items-center gap-2">
-                            <p-button *ngIf="user.stagiaireIds?.length" 
-                                (click)="viewInterns(user)"
-                                [label]="user.stagiaireIds!.length + ' stagiaire(s) affecté(s)'" 
-                                icon="pi pi-users" 
-                                [text]="true" 
-                                size="small" 
-                                styleClass="text-xs font-bold text-blue-600 hover:bg-blue-50 py-1" />
-                            <span *ngIf="!user.stagiaireIds?.length" class="text-xs text-slate-400 italic px-2">Aucun stagiaire</span>
-                        </div>
+                        <p-button label="Consulter Stagiaires" icon="pi pi-users" [text]="true" size="small" 
+                            styleClass="text-xs font-bold text-blue-600 hover:bg-blue-50 py-1" 
+                            (onClick)="viewInterns(user)" />
                     </td>
 
                     <td>
@@ -219,11 +214,11 @@ interface Intern {
                     <div *ngFor="let intern of managedInterns" class="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
                         <div class="flex items-center gap-3">
                             <div class="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold">
-                                {{ intern.firstName?.charAt(0) || '' }}{{ intern.lastName?.charAt(0) || '' }}
+                                {{ (intern.firstName?.charAt(0) || intern.lastName?.charAt(0) || 'S') }}
                             </div>
                             <div class="flex flex-col">
-                                <span class="font-bold text-slate-800">{{ intern?.firstName }} {{ intern?.lastName }}</span>
-                                <span class="text-xs text-slate-500">{{ intern?.email }}</span>
+                                <span class="font-bold text-slate-800">{{ intern.firstName }} {{ intern.lastName }}</span>
+                                <span class="text-xs text-slate-500">{{ intern.email || 'Email non disponible' }}</span>
                             </div>
                         </div>
                         <p-tag value="Stagiaire" severity="warn" styleClass="text-[9px]" />
@@ -239,7 +234,7 @@ interface Intern {
         </p-dialog>
 
         <!-- Assign Supervisor Dialog -->
-        <p-dialog [(visible)]="assignmentDialog" [style]="{ width: '450px' }" header="Affecter un Encadrant" [modal]="true">
+        <p-dialog [(visible)]="assignmentDialog" [style]="{ width: '450px' }" header="Affectation Encadrant" [modal]="true">
             <div class="flex flex-col gap-4 py-4">
                 <div class="p-4 bg-blue-50 rounded-xl border border-blue-100 mb-2">
                     <div class="flex items-center gap-3">
@@ -247,14 +242,25 @@ interface Intern {
                             {{ selectedIntern?.firstName?.charAt(0) || '' }}{{ selectedIntern?.lastName?.charAt(0) || '' }}
                         </div>
                         <div class="flex flex-col">
-                            <span class="text-xs text-blue-600 font-bold uppercase tracking-wider">Affecter un encadrant à :</span>
+                            <span class="text-xs text-blue-600 font-bold uppercase tracking-wider">Stagiaire :</span>
                             <span class="font-black text-slate-800 text-lg">{{ selectedIntern?.firstName }} {{ selectedIntern?.lastName }}</span>
                         </div>
                     </div>
                 </div>
 
-                <div class="flex flex-col gap-2">
-                    <label class="font-bold text-slate-700 ml-1">Sélectionner un Encadrant</label>
+                <div *ngIf="assignedEncadrantDTO" class="flex flex-col gap-3 animate-fadein">
+                    <label class="font-bold text-slate-700 ml-1 text-sm">Encadrant Affecté</label>
+                    <div class="flex items-center justify-between p-3 bg-white border border-green-200 rounded-xl">
+                        <div class="flex items-center gap-3">
+                            <i class="pi pi-check-circle text-green-500 text-xl"></i>
+                            <span class="font-bold text-slate-800">{{ assignedEncadrantDTO.encadrantNom }}</span>
+                        </div>
+                        <p-button icon="pi pi-user-minus" severity="danger" [text]="true" pTooltip="Désaffecter" tooltipPosition="top" (onClick)="detachSupervisor()" />
+                    </div>
+                </div>
+
+                <div *ngIf="!assignedEncadrantDTO" class="flex flex-col gap-2 animate-fadein">
+                    <label class="font-bold text-slate-700 ml-1 text-sm">Sélectionner un Encadrant</label>
                     <p-select [options]="getAvailableSupervisors()" 
                         [(ngModel)]="selectedSupervisorId" 
                         optionLabel="fullName" 
@@ -266,8 +272,8 @@ interface Intern {
                 </div>
             </div>
             <ng-template #footer>
-                <p-button label="Annuler" icon="pi pi-times" [text]="true" (click)="assignmentDialog = false" />
-                <p-button label="Confirmer l'affectation" icon="pi pi-check-circle" (click)="confirmAssignment()" 
+                <p-button label="Fermer" icon="pi pi-times" [text]="true" (click)="assignmentDialog = false" />
+                <p-button *ngIf="!assignedEncadrantDTO" label="Affecter l'encadrant" icon="pi pi-check-circle" (click)="confirmAssignment()" 
                     [disabled]="!selectedSupervisorId"
                     [style]="{ 'background-color': '#063970', 'border-color': '#063970' }" />
             </ng-template>
@@ -280,7 +286,7 @@ interface Intern {
 })
 export class UserManagement implements OnInit {
     userDialog: boolean = false;
-    users = signal<User[]>([]);
+    users: Signal<User[]>;
     user!: User;
     selectedUsers!: User[] | null;
     submitted: boolean = false;
@@ -296,14 +302,19 @@ export class UserManagement implements OnInit {
     managedInterns: User[] = [];
     selectedSupervisorId: string | null = null;
     oldUsername: string | null = null;
+    assignedEncadrantDTO: EncadrantDTO | null = null;
+    encadrantMap: { [stagiaireId: string]: EncadrantDTO } = {};
 
     @ViewChild('dt') dt!: Table;
 
-    constructor(
-        private userService: UserService,
-        private messageService: MessageService,
-        private confirmationService: ConfirmationService
-    ) {}
+    private userService = inject(UserService);
+    private affectationService = inject(AffectationService);
+    private messageService = inject(MessageService);
+    private confirmationService = inject(ConfirmationService);
+
+    constructor() {
+        this.users = this.userService.getUsersSignal();
+    }
 
     ngOnInit() {
         this.loadUsers();
@@ -339,6 +350,11 @@ export class UserManagement implements OnInit {
         return superv ? `${superv.firstName} ${superv.lastName}` : 'N/A';
     }
 
+    getInternCount(id: string | undefined): number {
+        if (!id) return 0;
+        return this.users().filter(u => u.encadrantId === id).length;
+    }
+
     getInternNames(ids: string[] | undefined): string[] {
         if (!ids || ids.length === 0) return [];
         return ids.map(id => {
@@ -347,16 +363,45 @@ export class UserManagement implements OnInit {
         });
     }
 
-    viewInterns(user: User) {
+    async viewInterns(user: User) {
         this.selectedSupervisor = user;
-        this.managedInterns = this.users().filter(u => user.stagiaireIds?.includes(u.id!));
+        this.managedInterns = [];
         this.managedInternsDialog = true;
+
+        try {
+            const data = await this.affectationService.getStagiairesByEncadrant(user.id!);
+            this.managedInterns = data.map(d => {
+                const fullUser = this.users().find(u => u.id === d.stagiaireId);
+                if (fullUser) return fullUser;
+                return {
+                    id: d.stagiaireId,
+                    firstName: d.stagiaireNom,
+                    lastName: '',
+                    role: 'Stagiaire' as any
+                };
+            });
+        } catch (err) {
+            console.error('Error fetching managed interns', err);
+            // Fallback to local filter if service fails
+            this.managedInterns = this.users().filter(u => u.encadrantId === user.id);
+        }
     }
 
-    openAssignSupervisor(intern: User) {
+    async viewEncadrant(intern: User) {
         this.selectedIntern = intern;
         this.selectedSupervisorId = null;
-        this.assignmentDialog = true;
+        this.assignedEncadrantDTO = null;
+
+        let enc = null;
+        try {
+            enc = await this.affectationService.getEncadrant(intern.id!);
+        } catch (err) {}
+
+        // Open the dialog outside the current change detection cycle to avoid NG0100
+        setTimeout(() => {
+            this.assignedEncadrantDTO = enc;
+            this.assignmentDialog = true;
+        });
     }
 
     getAvailableSupervisors() {
@@ -368,36 +413,45 @@ export class UserManagement implements OnInit {
             }));
     }
 
-    confirmAssignment() {
+    async detachSupervisor() {
+        if (!this.selectedIntern || !this.assignedEncadrantDTO) return;
+        try {
+            await this.affectationService.desaffecter(this.selectedIntern.id!, this.assignedEncadrantDTO.encadrantId);
+            this.messageService.add({ severity: 'success', summary: 'Succès', detail: 'Désaffectation réussie', life: 3000 });
+            this.assignedEncadrantDTO = null;
+            if (this.selectedIntern.id) {
+                delete this.encadrantMap[this.selectedIntern.id];
+            }
+        } catch(err) {
+            this.messageService.add({ severity: 'error', summary: 'Erreur', detail: 'Erreur lors de la désaffectation', life: 3000 });
+        }
+    }
+
+    async confirmAssignment() {
         if (!this.selectedIntern || !this.selectedSupervisorId) return;
 
-        const updatedUsers = [...this.users()];
-        
-        // Update Intern
-        const internIndex = updatedUsers.findIndex(u => u.id === this.selectedIntern?.id);
-        if (internIndex !== -1) {
-            updatedUsers[internIndex] = { ...updatedUsers[internIndex], encadrantId: this.selectedSupervisorId };
-        }
+        try {
+            await this.affectationService.affecter({
+                stagiaireId: this.selectedIntern.id!,
+                encadrantId: this.selectedSupervisorId
+            });
 
-        // Update Supervisor (add to stagiaireIds)
-        const supervisorIndex = updatedUsers.findIndex(u => u.id === this.selectedSupervisorId);
-        if (supervisorIndex !== -1) {
-            const supervisor = { ...updatedUsers[supervisorIndex] };
-            if (!supervisor.stagiaireIds) supervisor.stagiaireIds = [];
-            if (!supervisor.stagiaireIds.includes(this.selectedIntern.id!)) {
-                supervisor.stagiaireIds.push(this.selectedIntern.id!);
+            this.messageService.add({
+                severity: 'success',
+                summary: 'Succès',
+                detail: 'Encadrant affecté avec succès',
+                life: 3000
+            });
+
+            this.assignedEncadrantDTO = await this.affectationService.getEncadrant(this.selectedIntern.id!);
+            if (this.selectedIntern && this.assignedEncadrantDTO && this.selectedIntern.id) {
+                this.encadrantMap[this.selectedIntern.id] = this.assignedEncadrantDTO;
             }
-            updatedUsers[supervisorIndex] = supervisor;
+            this.assignmentDialog = false;
+        } catch (err) {
+            console.error('Error assigning supervisor', err);
+            this.messageService.add({ severity: 'error', summary: 'Erreur', detail: "Échec de l'affectation" });
         }
-
-        this.users.set(updatedUsers);
-        this.assignmentDialog = false;
-        this.messageService.add({
-            severity: 'success',
-            summary: 'Succès',
-            detail: 'Encadrant affecté avec succès',
-            life: 3000
-        });
     }
 
     openNew() {
@@ -414,8 +468,23 @@ export class UserManagement implements OnInit {
 
     async loadUsers() {
         try {
-            const data = await this.userService.getUsers();
-            this.users.set(data);
+            await this.userService.fetchAllUsers();
+            
+            const stagiaires = this.users().filter(u => u.role === 'Stagiaire');
+            const newMap = { ...this.encadrantMap };
+            
+            await Promise.allSettled(stagiaires.map(async (s) => {
+                if (!s.id) return;
+                try {
+                    const enc = await this.affectationService.getEncadrant(s.id);
+                    if (enc) newMap[s.id] = enc;
+                } catch (e) {}
+            }));
+
+            // Assign map async to avoid NG0100 on initial view load
+            setTimeout(() => {
+                this.encadrantMap = newMap;
+            });
         } catch (err) {
             this.messageService.add({ severity: 'error', summary: 'Erreur', detail: 'Échec du chargement des utilisateurs' });
         }

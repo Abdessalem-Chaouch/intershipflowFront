@@ -8,12 +8,13 @@ export interface AffectationRequest {
 }
 
 export interface StagiaireAffecteDTO {
-    id: string;
-    firstName: string;
-    lastName: string;
-    email: string;
-    username: string;
-    role: string;
+    stagiaireId: string;
+    stagiaireNom: string;
+}
+
+export interface EncadrantDTO {
+    encadrantId: string;
+    encadrantNom: string;
 }
 
 @Injectable({
@@ -36,5 +37,9 @@ export class AffectationService {
 
     async getStagiairesByEncadrant(encadrantId: string): Promise<StagiaireAffecteDTO[]> {
         return firstValueFrom(this.http.get<StagiaireAffecteDTO[]>(`${this.apiUrl}/encadrant/${encadrantId}/stagiaires`));
+    }
+
+    async getEncadrant(stagiaireId: string): Promise<EncadrantDTO> {
+        return firstValueFrom(this.http.get<EncadrantDTO>(`${this.apiUrl}/stagiaire/${stagiaireId}/encadrant`));
     }
 }

@@ -1,6 +1,6 @@
 import { Injectable, inject, signal, computed } from '@angular/core';
 import { HttpClient, HttpHeaders, HttpParams } from '@angular/common/http';
-import { firstValueFrom, Observable } from 'rxjs';
+import { firstValueFrom, Observable, map, throwError } from 'rxjs';
 import { Router } from '@angular/router';
 import { MenuItem } from 'primeng/api';
 
@@ -59,7 +59,6 @@ export class UserService {
     token = signal<string | null>(null);
 
     constructor() {
-        this.fetchAllUsers();
         this.initializeAuth();
     }
 
@@ -342,15 +341,42 @@ export class UserService {
         }
     }
 
+    refreshToken(): Observable<any> {
+        const refreshToken = localStorage.getItem('refresh_token');
+        if (!refreshToken) return throwError(() => new Error('No refresh token available'));
+
+        const params = new HttpParams().set('token', refreshToken);
+        return this.http.post<any>(`${this.apiUrl}/refresh`, null, { params }).pipe(
+            map(response => {
+                const tokens = response.data || response;
+                const newAccessToken = tokens.access_token || tokens.accessToken;
+                const newRefreshToken = tokens.refresh_token || tokens.refreshToken;
+
+                if (newAccessToken) {
+                    localStorage.setItem('auth_token', newAccessToken);
+                    this.token.set(newAccessToken);
+                    if (newRefreshToken) localStorage.setItem('refresh_token', newRefreshToken);
+                    return newAccessToken;
+                }
+                throw new Error('Refresh failed - No access token in response');
+            })
+        );
+    }
+
     logout() {
         const refreshToken = localStorage.getItem('refresh_token');
         if (refreshToken) {
             const params = new HttpParams().set('refreshToken', refreshToken);
+            // On tente de prévenir le backend, mais on déconnecte quand même localement
             this.http.post(`${this.apiUrl}/logout`, null, { params, responseType: 'text' }).subscribe({
                 next: () => console.log('Backend logout success'),
                 error: (err) => console.error('Logout error on backend', err)
             });
         }
+        this.clearLocalSession();
+    }
+
+    private clearLocalSession() {
         localStorage.removeItem('auth_token');
         localStorage.removeItem('refresh_token');
         this.token.set(null);

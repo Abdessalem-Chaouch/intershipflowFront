@@ -20,7 +20,7 @@ import { AvatarModule } from 'primeng/avatar';
             </button>
             <a class="layout-topbar-logo" routerLink="/">
                 
-                <img src="siga logo.jpg" alt="SIGA Logo" style="height: 50px; width: auto; object-fit: contain;"/>
+                <img src="sigaLogo.png" alt="SIGA Logo" style="height: 25px; width: auto; object-fit: contain;"/>
             
             </a>
         </div>

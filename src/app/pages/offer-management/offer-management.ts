@@ -1,4 +1,4 @@
-import { Component, OnInit, signal, ViewChild, Signal } from '@angular/core';
+import { Component, OnInit, signal, ViewChild, Signal, inject, ChangeDetectorRef } from '@angular/core';
 import { Router } from '@angular/router';
 import { ConfirmationService, MessageService } from 'primeng/api';
 import { Table, TableModule } from 'primeng/table';
@@ -26,6 +26,7 @@ import { InternshipService, InternshipOffer } from '@/app/services/internship.se
 import { TestService, TechnicalTest } from '@/app/services/test.service';
 import { ExerciceService, Exercice } from '@/app/services/exercice.service';
 import { QuestionService, Question } from '@/app/services/question.service';
+import { CandidatureService } from '@/app/services/candidature.service';
 
 import { TestCandidatePreviewComponent } from '../test-management/test-candidate-preview.component';
 
@@ -129,10 +130,13 @@ interface ExercicePrep {
                     <td>
                         <p-tableCheckbox [value]="offer" />
                     </td>
-                    <td>{{ offer.title }}</td>
+                    <td [pTooltip]="offer.title" tooltipPosition="top">{{ truncateTitle(offer.title) }}</td>
                     <td>{{ offer.location }}</td>
                     <td>{{ offer.dateDebut | date:'dd/MM/yyyy' }}</td>
-                    <td>{{ offer.dateFin | date:'dd/MM/yyyy' }}</td>
+                    <td>
+                        {{ offer.dateFin | date:'dd/MM/yyyy' }}
+                        <p-tag *ngIf="isExpired(offer.dateFin)" value="Expiré" severity="danger" [rounded]="true" styleClass="text-[5px] font-black uppercase ml-1 px-1 py-0" />
+                    </td>
                     <td>
                         <div class="flex items-center gap-2">
                             <p-tag 
@@ -186,7 +190,9 @@ interface ExercicePrep {
                             </div>
                         </div>
                     </div>
-                    <p-tag [value]="selectedOfferForView.badge || 'Ouvert'" severity="info" [rounded]="true" styleClass="px-4 py-1.5 font-black uppercase text-[10px]" />
+                    <p-tag [value]="isExpired(selectedOfferForView.dateFin) ? 'Fermé' : (selectedOfferForView.badge || 'Ouvert')" 
+                           [severity]="isExpired(selectedOfferForView.dateFin) ? 'danger' : 'info'" 
+                           [rounded]="true" styleClass="px-4 py-1.5 font-black uppercase text-[10px]" />
                 </div>
 
                 <div class="grid grid-cols-2 gap-4">
@@ -227,21 +233,33 @@ interface ExercicePrep {
                 </div>
 
                 <div class="flex flex-col gap-3">
-                    <h5 class="text-xs font-black text-slate-900 dark:text-slate-100 uppercase tracking-[0.2em] flex items-center gap-2 mb-1">
-                        <i class="pi pi-chevron-right text-indigo-500"></i> Tests techniques
+                    <h5 class="text-xs font-black text-slate-900 dark:text-slate-100 uppercase tracking-[0.2em] flex items-center gap-2 mb-1 cursor-pointer select-none" (click)="showTestsDetail.set(!showTestsDetail())">
+                        <i [class]="showTestsDetail() ? 'pi pi-chevron-down text-indigo-500' : 'pi pi-chevron-right text-indigo-500'" class="transition-all duration-300"></i> 
+                        Tests techniques
                     </h5>
-                    <div class="flex flex-col gap-2">
-                        <div *ngFor="let t of viewingOfferTests()" class="flex items-center justify-between p-3 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-xl shadow-sm hover:border-indigo-200 transition-colors">
+                    <div *ngIf="showTestsDetail()" class="flex flex-col gap-2 animate-in fade-in slide-in-from-top-1 duration-300">
+                        <div *ngFor="let t of viewingOfferTests()" 
+                             [ngClass]="{'ring-2 ring-green-500/20 bg-green-50/30 border-green-200 dark:bg-green-900/10 dark:border-green-800': selectedOfferForView.selectedTestId === t.id}"
+                             class="flex items-center justify-between p-3 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-xl shadow-sm hover:border-indigo-200 transition-all duration-300 relative group">
+                            
+                            <!-- Highlight Badge for Active Test -->
+
+
                             <div class="flex items-center gap-3">
-                                <div class="w-8 h-8 rounded-lg bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 flex items-center justify-center text-xs">
+                                <div class="w-8 h-8 rounded-lg flex items-center justify-center text-xs transition-colors"
+                                     [ngClass]="selectedOfferForView.selectedTestId === t.id ? 'bg-green-100 text-green-600' : 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600'">
                                     <i class="pi pi-file"></i>
                                 </div>
                                 <div class="flex flex-col">
                                     <span class="text-sm font-bold text-slate-800 dark:text-slate-200">{{ t.titre }}</span>
-                                    <span class="text-[10px] text-slate-400 font-bold uppercase">{{ t.dureeMinutes }} minutes</span>
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-[10px] text-slate-400 font-bold uppercase">{{ t.dureeMinutes }} minutes</span>
+                                        <span *ngIf="selectedOfferForView.selectedTestId === t.id" class="text-[9px] text-green-600 font-black uppercase tracking-tighter">● Sélectionné</span>
+                                    </div>
                                 </div>
                             </div>
-                            <p-button icon="pi pi-eye" [text]="true" [rounded]="true" size="small" (onClick)="previewTest(t)" pTooltip="Aperçu" />
+                            <p-button icon="pi pi-eye" [text]="true" [rounded]="true" size="small" (onClick)="previewTest(t)" pTooltip="Aperçu" 
+                                      [styleClass]="selectedOfferForView.selectedTestId === t.id ? 'text-green-600' : ''" />
                         </div>
                         <div *ngIf="viewingOfferTests().length === 0" class="p-4 text-center bg-slate-50 dark:bg-slate-800/20 rounded-xl border border-dashed border-slate-200 dark:border-slate-700 text-slate-400 italic text-sm">
                             Aucun test associé à cette offre.
@@ -355,13 +373,36 @@ interface ExercicePrep {
         </p-dialog>
 
         <!-- View Associated Tests Dialog -->
-        <p-dialog [(visible)]="viewTestsDialog" [style]="{ width: '750px' }" header="Gestion des Tests - {{ selectedOfferForTest?.title }}" [modal]="true" class="custom-dialog">
+        <p-dialog [(visible)]="viewTestsDialog" [style]="{ width: '750px' }" [header]="'Gestion des Tests - ' + selectedOfferForTest?.title" [modal]="true" class="custom-dialog">
             <div *ngIf="selectedOfferForTest" class="p-1">
                 
+                <!-- Current Selection Info Bar -->
+                <div *ngIf="selectedOfferForTest" class="mb-6 mx-2 p-4 rounded-2xl bg-slate-50 text-slate-800 flex items-center justify-between border border-slate-100 animate-in fade-in slide-in-from-bottom-2 duration-500">
+                    <div class="flex items-center gap-4">
+                        <div class="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center text-[#063970] border border-slate-100">
+                            <i [class]="selectedOfferForTest.typeSelection === 'ALEATOIRE' ? 'pi pi-refresh' : 'pi pi-bullseye'" class="text-lg"></i>
+                        </div>
+                        <div class="flex flex-col">
+                            <span class="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em]">Stratégie de sélection</span>
+                            <span class="font-bold text-sm tracking-wide">
+                                {{ selectedOfferForTest.typeSelection === 'ALEATOIRE' ? 'Choix Aléatoire' : 'Sélection Manuelle' }}
+                            </span>
+                        </div>
+                    </div>
+                    
+                    <div *ngIf="selectedOfferForTest.selectedTestId" class="flex items-center gap-3 pr-2">
+                        <div class="h-8 w-[1px] bg-slate-100"></div>
+                        <div class="flex flex-col items-end">
+                            <span class="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em]">Test Actif</span>
+                            <span class="font-black text-[#063970] text-xs uppercase">{{ getTestTitleById(selectedOfferForTest.selectedTestId) }}</span>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Strategy Selection (Premium Cards) -->
-                <div class="grid grid-cols-2 gap-4 mb-8">
-                    <div *ngIf="selectedOfferForTest" (click)="selectedOfferForTest.testSelectionMode = 'ALEATOIRE'; updateOfferSelection()" 
-                         [ngClass]="{'border-blue-500 bg-blue-50/50 ring-2 ring-blue-500/20': selectedOfferForTest.testSelectionMode === 'ALEATOIRE'}"
+                <div class="grid grid-cols-2 gap-4 mb-8 px-2">
+                    <div *ngIf="selectedOfferForTest" (click)="selectedOfferForTest.typeSelection = 'ALEATOIRE'; updateOfferSelection()" 
+                         [ngClass]="{'border-blue-500 bg-blue-50/50 ring-2 ring-blue-500/20': selectedOfferForTest.typeSelection === 'ALEATOIRE'}"
                          class="cursor-pointer p-5 rounded-2xl border-2 border-slate-100 transition-all hover:border-blue-200 group relative overflow-hidden">
                         <div class="flex items-center gap-4">
                             <div class="w-12 h-12 rounded-xl flex items-center justify-center bg-blue-100 text-blue-600 transition-transform group-hover:scale-110">
@@ -374,8 +415,8 @@ interface ExercicePrep {
                         </div>
                     </div>
 
-                    <div *ngIf="selectedOfferForTest" (click)="selectedOfferForTest.testSelectionMode = 'UN_CHOIX'; updateOfferSelection()" 
-                         [ngClass]="{'border-indigo-500 bg-indigo-50/50 ring-2 ring-indigo-500/20': selectedOfferForTest.testSelectionMode === 'UN_CHOIX'}"
+                    <div *ngIf="selectedOfferForTest" (click)="selectedOfferForTest.typeSelection = 'MANUEL'; updateOfferSelection()" 
+                         [ngClass]="{'border-indigo-500 bg-indigo-50/50 ring-2 ring-indigo-500/20': selectedOfferForTest.typeSelection === 'MANUEL'}"
                          class="cursor-pointer p-5 rounded-2xl border-2 border-slate-100 transition-all hover:border-indigo-200 group relative overflow-hidden">
 
                         <div class="flex items-center gap-4">
@@ -396,15 +437,12 @@ interface ExercicePrep {
                         <i class="pi pi-list text-blue-500"></i>
                         Liste des tests associés
                     </h5>
-                    <p-button label="Associer un test" icon="pi pi-plus" size="small" [rounded]="true" [outlined]="true"
-                              styleClass="border-[#063970] text-[#063970] hover:bg-blue-50/50 text-[10px] font-black uppercase tracking-widest px-4" 
-                              (onClick)="openAssignTest()" />
                 </div>
 
                 <p-table [value]="associatedTests()" [tableStyle]="{ 'min-width': '100%' }" class="p-fluid">
                     <ng-template #header>
                         <tr class="bg-slate-50 text-[10px] uppercase font-black text-slate-400 tracking-widest border-0">
-                            <th style="width: 4rem" *ngIf="selectedOfferForTest && selectedOfferForTest.testSelectionMode === 'UN_CHOIX'" class="bg-transparent"></th>
+                            <th style="width: 4rem" *ngIf="selectedOfferForTest && selectedOfferForTest.typeSelection === 'MANUEL'" class="bg-transparent"></th>
                             <th class="bg-transparent">Titre du Test</th>
                             <th style="width: 8rem" class="bg-transparent text-center">Durée</th>
                             <th style="width: 9rem" class="bg-transparent text-right pr-4">Actions</th>
@@ -412,7 +450,7 @@ interface ExercicePrep {
                     </ng-template>
                     <ng-template #emptymessage>
                         <tr>
-                            <td [attr.colspan]="selectedOfferForTest.testSelectionMode === 'UN_CHOIX' ? 4 : 3" class="text-center p-8 text-slate-400 italic">
+                            <td [attr.colspan]="selectedOfferForTest.typeSelection === 'MANUEL' ? 4 : 3" class="text-center p-8 text-slate-400 italic">
                                 <div class="flex flex-col items-center gap-2">
                                     <i class="pi pi-inbox text-3xl opacity-20"></i>
                                     <span>Aucun test associé ou chargement...</span>
@@ -421,9 +459,9 @@ interface ExercicePrep {
                         </tr>
                     </ng-template>
                     <ng-template #body let-t>
-                        <tr *ngIf="selectedOfferForTest" [ngClass]="{'bg-indigo-50/40': selectedOfferForTest.selectedTestId === t.id && selectedOfferForTest.testSelectionMode === 'UN_CHOIX'}"
+                        <tr *ngIf="selectedOfferForTest" [ngClass]="{'bg-indigo-50/40': selectedOfferForTest.selectedTestId === t.id && selectedOfferForTest.typeSelection === 'MANUEL'}"
                             class="border-b border-slate-50 transition-colors">
-                            <td *ngIf="selectedOfferForTest && selectedOfferForTest.testSelectionMode === 'UN_CHOIX'" class="text-center">
+                            <td *ngIf="selectedOfferForTest && selectedOfferForTest.typeSelection === 'MANUEL'" class="text-center">
                                 <p-radiobutton [value]="t.id" [(ngModel)]="selectedOfferForTest.selectedTestId" (onClick)="updateOfferSelection()" />
                             </td>
                             <td>
@@ -448,7 +486,7 @@ interface ExercicePrep {
                     </ng-template>
                     <ng-template #emptymessage>
                         <tr>
-                            <td [attr.colspan]="selectedOfferForTest.testSelectionMode === 'UN_CHOIX' ? 4 : 3" class="text-center py-10">
+                            <td [attr.colspan]="selectedOfferForTest.typeSelection === 'MANUEL' ? 4 : 3" class="text-center py-10">
                                 <div class="flex flex-col items-center gap-2 opacity-30">
                                     <i class="pi pi-folder-open text-4xl"></i>
                                     <span class="text-xs font-bold uppercase tracking-widest">Aucun test associé</span>
@@ -458,9 +496,17 @@ interface ExercicePrep {
                     </ng-template>
                 </p-table>
             </div>
-            <ng-template #footer>
-                <p-button label="Fermer" icon="pi pi-times" [text]="true" (click)="viewTestsDialog = false" />
-            </ng-template>
+<ng-template #footer>
+    <div class="flex items-center justify-end w-full px-2">
+        <p-button 
+            label="Associer un test" 
+            icon="pi pi-plus" 
+            [text]="true" 
+            styleClass="text-slate-400 font-bold hover:text-slate-600"
+            (onClick)="openAssignTest()"
+        />
+    </div>
+</ng-template>
         </p-dialog>
 
         <!-- Test Choice Dialog -->
@@ -895,24 +941,29 @@ interface ExercicePrep {
         <!-- View Applications Dialog -->
         <p-dialog [(visible)]="viewApplicationsDialog" [style]="{ width: '650px' }" [header]="'Candidatures - ' + selectedOfferForApps?.title" [modal]="true">
             <div class="flex flex-col gap-3 py-2">
-                <div *ngIf="filteredApplications.length > 0; else noApps" class="flex flex-col gap-2">
-                    <div *ngFor="let app of filteredApplications" class="flex items-center justify-between p-3 bg-slate-50/50 rounded-xl border border-slate-100 hover:bg-slate-50 transition-colors">
-                        <div class="flex items-center gap-3">
-                            <div class="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center text-white font-bold text-xs shadow-sm">
-                                {{ app.firstName.charAt(0) }}{{ app.lastName.charAt(0) }}
+                <div *ngIf="filteredApplications.length > 0; else noApps" class="flex flex-col gap-3">
+                    <div *ngFor="let app of filteredApplications" class="flex items-center justify-between p-4 bg-slate-50/50 rounded-2xl border border-slate-100 hover:border-blue-200 hover:bg-white transition-all duration-300 shadow-sm group">
+                        <div class="flex items-center gap-4">
+                            <div class="w-12 h-12 rounded-2xl bg-[#063970] text-white flex items-center justify-center font-black text-sm shadow-lg shadow-blue-900/10 group-hover:scale-105 transition-transform">
+                                {{ app.prenom?.charAt(0) }}{{ app.nom?.charAt(0) }}
                             </div>
                             <div class="flex flex-col">
-                                <span class="font-bold text-slate-800">{{ app.firstName }} {{ app.lastName }}</span>
-                                <div class="flex items-center gap-2 mt-0.5">
-                                    <span class="text-[10px] font-black uppercase tracking-widest text-slate-400">{{ app.date | date:'dd MMM yyyy' }}</span>
-                                    <span class="w-1 h-1 rounded-full bg-slate-300"></span>
-                                    <span class="text-[10px] font-bold" [ngStyle]="{'color': getScoreColor(app.iaScore)}">IA: {{ app.iaScore || 0 }}%</span>
+                                <span class="font-black text-slate-800 tracking-tight">{{ app.prenom }} {{ app.nom }}</span>
+                                <div class="flex items-center gap-2 mt-1">
+                                    <div class="flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-indigo-50 text-indigo-600 text-[9px] font-black uppercase tracking-wider">
+                                        <i class="pi pi-bolt text-[8px]"></i>
+                                        Score IA: {{ app.scoreAI || 0 }}%
+                                    </div>
+                                    <div *ngIf="app.approvedByAI" class="flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-emerald-50 text-emerald-600 text-[9px] font-black uppercase tracking-wider">
+                                        <i class="pi pi-check-circle text-[8px]"></i>
+                                        Approuvé
+                                    </div>
                                 </div>
                             </div>
                         </div>
                         <div class="flex items-center gap-3">
-                            <i *ngIf="app.iaApproved" class="pi pi-check-circle text-green-500" pTooltip="Approuvé par IA" tooltipPosition="top"></i>
-                            <p-tag [value]="getStatusLabel(app.status)" [severity]="getStatusSeverity(app.status)" styleClass="text-[9px] font-black uppercase" />
+                            <p-tag [value]="getStatusLabel(app.etat || app.status)" [severity]="getStatusSeverity(app.etat || app.status)" styleClass="text-[9px] font-black uppercase px-3 py-1.5 rounded-lg" />
+                            <p-button icon="pi pi-chevron-right" [text]="true" [rounded]="true" size="small" (onClick)="goToApplications()" />
                         </div>
                     </div>
                 </div>
@@ -947,7 +998,7 @@ export class OfferManagement implements OnInit {
     selectedOffers: InternshipOffer[] | null = null;
     offerDialog: boolean = false;
     submitted: boolean = false;
-    
+
     // ─── Test Management State (Legacy/Quick) ───────────────────
     testDialog: boolean = false;
     newTest: Partial<TechnicalTest> = {};
@@ -986,7 +1037,7 @@ export class OfferManagement implements OnInit {
     filteredTests: TechnicalTest[] = [];
     previewVisible: boolean = false;
     selectedTestForPreview: TechnicalTest | null = null;
-    
+
     // Applications
     applications: Signal<any[]>;
     viewApplicationsDialog: boolean = false;
@@ -997,25 +1048,28 @@ export class OfferManagement implements OnInit {
     viewOfferDialog = signal(false);
     selectedOfferForView: InternshipOffer | null = null;
     viewingOfferTests = signal<TechnicalTest[]>([]);
+    showTestsDetail = signal(false);
 
     // ─── Options ────────────────────────────────────────────────
     typeQuestions = [
         { label: 'Choix unique (QCU)', value: 'QCU' },
         { label: 'Choix multiple (QCM)', value: 'QCM' },
-        { label: 'Vrai/Faux',           value: 'TRUE_FALSE' },
-        { label: 'Question/Réponse',    value: 'QUESTION_REPONSE' }
+        { label: 'Vrai/Faux', value: 'TRUE_FALSE' },
+        { label: 'Question/Réponse', value: 'QUESTION_REPONSE' }
     ];
     trueFalseOpts = [{ label: 'Vrai', value: 'Vrai' }, { label: 'Faux', value: 'Faux' }];
 
-    constructor(
-        private internshipService: InternshipService,
-        private testService: TestService,
-        private exerciceService: ExerciceService,
-        private questionService: QuestionService,
-        private messageService: MessageService,
-        private confirmationService: ConfirmationService,
-        private router: Router
-    ) {
+    private internshipService = inject(InternshipService);
+    private testService = inject(TestService);
+    private exerciceService = inject(ExerciceService);
+    private questionService = inject(QuestionService);
+    private candidatureService = inject(CandidatureService);
+    private messageService = inject(MessageService);
+    private confirmationService = inject(ConfirmationService);
+    private router = inject(Router);
+    private cdr = inject(ChangeDetectorRef);
+
+    constructor() {
         this.offers = this.internshipService.getOffers();
         this.tests = this.testService.getTests();
         this.exercices = this.exerciceService.getExercices();
@@ -1023,13 +1077,14 @@ export class OfferManagement implements OnInit {
         this.applications = this.internshipService.getApplications();
     }
 
-    ngOnInit() {}
+    ngOnInit() { }
 
     async viewOfferDetails(offer: InternshipOffer) {
         this.selectedOfferForView = offer;
         this.viewingOfferTests.set([]);
+        this.showTestsDetail.set(false);
         this.viewOfferDialog.set(true);
-        
+
         try {
             const tests = await this.testService.getTestsByOffer(offer.id);
             this.viewingOfferTests.set(tests);
@@ -1049,7 +1104,7 @@ export class OfferManagement implements OnInit {
     }
 
     editOffer(offer: InternshipOffer) {
-        this.offer = { 
+        this.offer = {
             ...offer,
             dateDebut: (offer.dateDebut ? new Date(offer.dateDebut) : undefined) as any,
             dateFin: (offer.dateFin ? new Date(offer.dateFin) : undefined) as any
@@ -1125,15 +1180,25 @@ export class OfferManagement implements OnInit {
     async viewTests(offer: InternshipOffer) {
         this.selectedOfferForTest = offer;
         this.associatedTests.set([]);
-        
+        this.viewTestsDialog = true;
+
         try {
-            // Load data before showing dialog to avoid NG0100
+            // Refresh offer data to get latest selection state from server
+            const refreshedOffer = await this.internshipService.getOfferById(offer.id);
+            if (refreshedOffer) {
+                this.selectedOfferForTest = refreshedOffer;
+            }
+
+            // Load associated tests
             const data = await this.testService.getTestsByOffer(offer.id);
             this.associatedTests.set(data);
-            this.viewTestsDialog = true;
         } catch (err) {
-            this.messageService.add({ severity: 'error', summary: 'Erreur', detail: 'Échec du chargement des tests' });
+            console.error('Error loading tests/offer', err);
         }
+    }
+
+    getTestTitleById(testId: string): string {
+        return this.associatedTests().find(t => t.id === testId)?.titre || 'N/A';
     }
 
     async saveQuickTest() {
@@ -1154,7 +1219,7 @@ export class OfferManagement implements OnInit {
                 ...this.selectedOfferForTest!,
                 testCount: nextCount
             };
-            
+
             // Optimistic update
             await this.internshipService.updateOffer(updatedOffer);
             this.selectedOfferForTest!.testCount = nextCount;
@@ -1182,7 +1247,7 @@ export class OfferManagement implements OnInit {
     }
 
     openNewTestWizard() {
-        this.test = { 
+        this.test = {
             dureeMinutes: 60,
             offerIds: this.selectedOfferForTest ? [this.selectedOfferForTest.id] : []
         };
@@ -1197,9 +1262,26 @@ export class OfferManagement implements OnInit {
         this.previewVisible = true;
     }
 
-    updateOfferSelection() {
-        if (this.selectedOfferForTest) {
-            this.internshipService.updateOffer({ ...this.selectedOfferForTest });
+    async updateOfferSelection() {
+        if (!this.selectedOfferForTest) return;
+
+        try {
+            if (this.selectedOfferForTest.typeSelection === 'ALEATOIRE') {
+                const res = await this.internshipService.getRandomTest(this.selectedOfferForTest.id);
+                if (res && res.id) {
+                    this.selectedOfferForTest.selectedTestId = res.id.toString();
+                }
+                this.messageService.add({ severity: 'success', summary: 'Succès', detail: 'Test aléatoire sélectionné' });
+            } else if (this.selectedOfferForTest.typeSelection === 'MANUEL' && this.selectedOfferForTest.selectedTestId) {
+                await this.internshipService.chooseTest(this.selectedOfferForTest.id, this.selectedOfferForTest.selectedTestId);
+                this.messageService.add({ severity: 'success', summary: 'Succès', detail: 'Test manuel sélectionné' });
+            }
+
+            // Sync with backend via the main update endpoint
+            await this.internshipService.updateOffer({ ...this.selectedOfferForTest });
+        } catch (err) {
+            console.error('Error updating offer selection', err);
+            this.messageService.add({ severity: 'error', summary: 'Erreur', detail: 'Échec de la mise à jour du test' });
         }
     }
 
@@ -1214,7 +1296,7 @@ export class OfferManagement implements OnInit {
                 try {
                     // Filter out this offer from the test's associations
                     const updatedOfferIds = (test.offerIds || []).filter(id => id !== this.selectedOfferForTest!.id);
-                    
+
                     // Update the test on backend (only removing this offer ID)
                     await this.testService.updateTest({
                         ...test,
@@ -1226,10 +1308,10 @@ export class OfferManagement implements OnInit {
                         ...this.selectedOfferForTest!,
                         testCount: Math.max(0, (this.selectedOfferForTest!.testCount || 0) - 1)
                     };
-                    
+
                     // Update global signal (for main table)
                     await this.internshipService.updateOffer(updatedOffer);
-                    
+
                     // Update local object for the dialog counter
                     this.selectedOfferForTest!.testCount = updatedOffer.testCount;
 
@@ -1243,10 +1325,10 @@ export class OfferManagement implements OnInit {
                         life: 3000
                     });
                 } catch (err) {
-                    this.messageService.add({ 
-                        severity: 'error', 
-                        summary: 'Erreur', 
-                        detail: 'Échec du détachement du test' 
+                    this.messageService.add({
+                        severity: 'error',
+                        summary: 'Erreur',
+                        detail: 'Échec du détachement du test'
                     });
                 }
             }
@@ -1255,7 +1337,7 @@ export class OfferManagement implements OnInit {
 
     openAssignTest() {
         if (!this.selectedOfferForTest) return;
-        
+
         const allTests = this.testService.getTests()();
         this.filteredTests = allTests.filter((t: TechnicalTest) => !t.offerIds.includes(this.selectedOfferForTest!.id));
         this.assignTestDialog = true;
@@ -1264,8 +1346,8 @@ export class OfferManagement implements OnInit {
     filterAvailableTests(event: Event) {
         const query = (event.target as HTMLInputElement).value.toLowerCase();
         const allTests = this.testService.getTests()();
-        this.filteredTests = allTests.filter((t: TechnicalTest) => 
-            !t.offerIds.includes(this.selectedOfferForTest!.id) && 
+        this.filteredTests = allTests.filter((t: TechnicalTest) =>
+            !t.offerIds.includes(this.selectedOfferForTest!.id) &&
             (t.titre.toLowerCase().includes(query) || t.description.toLowerCase().includes(query))
         );
     }
@@ -1278,19 +1360,19 @@ export class OfferManagement implements OnInit {
             this.assignTestDialog = false;
             return;
         }
-        
+
         newOfferIds.push(this.selectedOfferForTest.id);
 
         // --- INSTANT UI FEEDBACK ---
         const updatedTest = { ...test, offerIds: newOfferIds };
-        
+
         // Calculate next count
         const currentCount = this.selectedOfferForTest.testCount || 0;
         const nextCount = currentCount + 1;
-        
+
         // 1. Remove from selection list immediately 
         this.filteredTests = this.filteredTests.filter(t => t.id !== test.id);
-        
+
         // 2. Add to associated tests list for the current modal view
         const currentAssociated = this.associatedTests();
         if (!currentAssociated.find(at => at.id === test.id)) {
@@ -1306,10 +1388,10 @@ export class OfferManagement implements OnInit {
             ...this.selectedOfferForTest,
             testCount: nextCount
         };
-        
+
         // Propagate changes to signals (Optimistic)
         await this.internshipService.updateOffer(updatedOffer);
-        
+
         // Ensure local reference is updated for subsequent adds in same dialog session
         this.selectedOfferForTest.testCount = nextCount;
 
@@ -1421,13 +1503,13 @@ export class OfferManagement implements OnInit {
                         ...this.selectedOfferForTest,
                         testCount: nextCount
                     };
-                    
+
                     // Update signal for main table
                     await this.internshipService.updateOffer(updatedOffer);
-                    
+
                     // Update local reference
                     this.selectedOfferForTest.testCount = nextCount;
-                    
+
                     // Update associated tests list if it is active
                     this.associatedTests.update(tests => [...tests, savedTest]);
                 }
@@ -1538,26 +1620,51 @@ export class OfferManagement implements OnInit {
         return (this.applications() || []).filter(app => app.offerTitle === offerTitle).length;
     }
 
-    viewApplications(offer: InternshipOffer) {
+    async viewApplications(offer: InternshipOffer) {
         this.selectedOfferForApps = offer;
-        this.filteredApplications = (this.applications() || []).filter(app => app.offerTitle === offer.title);
+        this.filteredApplications = [];
         this.viewApplicationsDialog = true;
+        
+        try {
+            const data = await this.candidatureService.getByOffre(parseInt(offer.id));
+            this.filteredApplications = data;
+            this.cdr.detectChanges(); // Fix NG0100: ExpressionChangedAfterItHasBeenCheckedError
+        } catch (err) {
+            console.error('Error fetching filtered applications', err);
+            // Fallback to local filtering if server fails
+            this.filteredApplications = (this.applications() || []).filter(app => app.offerTitle === offer.title);
+        }
     }
 
     getStatusLabel(status: string) {
         switch (status) {
-            case 'ACCEPTEE': return 'Accepté';
-            case 'REFUSEE': return 'Refusé';
+            case 'PENDING':
             case 'EN_ATTENTE': return 'En attente';
+            case 'INTERVIEW': return 'Entretien';
+            case 'ACCEPTED':
+            case 'ACCEPTEE': return 'Accepté';
+            case 'REJECTED':
+            case 'REFUSEE': return 'Refusé';
             default: return status;
         }
     }
 
-    getStatusSeverity(status: string) {
+    truncateTitle(title: string): string {
+        if (!title) return '';
+        const words = title.split(' ');
+        if (words.length <= 4) return title;
+        return words.slice(0, 4).join(' ') + '...';
+    }
+
+    getStatusSeverity(status: string): 'success' | 'info' | 'warn' | 'danger' | 'secondary' {
         switch (status) {
+            case 'ACCEPTED':
             case 'ACCEPTEE': return 'success';
+            case 'REJECTED':
             case 'REFUSEE': return 'danger';
+            case 'PENDING':
             case 'EN_ATTENTE': return 'warn';
+            case 'INTERVIEW': return 'info';
             default: return 'secondary';
         }
     }
@@ -1572,5 +1679,12 @@ export class OfferManagement implements OnInit {
     goToApplications() {
         this.viewApplicationsDialog = false;
         this.router.navigate(['/pages/application-management']);
+    }
+
+    isExpired(dateFin: any): boolean {
+        if (!dateFin) return false;
+        const end = new Date(dateFin);
+        const now = new Date();
+        return end < now;
     }
 }

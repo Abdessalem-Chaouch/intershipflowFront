@@ -7,7 +7,7 @@ import { TagModule } from 'primeng/tag';
 import { DividerModule } from 'primeng/divider';
 import { TechnicalTest } from '@/app/services/test.service';
 import { ExerciceService } from '@/app/services/exercice.service';
-import { QuestionService } from './service/question.service';
+import { QuestionService } from '@/app/services/question.service';
 
 registerLocaleData(localeFr);
 
@@ -15,9 +15,9 @@ registerLocaleData(localeFr);
     selector: 'app-test-candidate-preview',
     standalone: true,
     imports: [
-        CommonModule, 
-        DialogModule, 
-        ButtonModule, 
+        CommonModule,
+        DialogModule,
+        ButtonModule,
         TagModule,
         DividerModule
     ],
@@ -174,7 +174,7 @@ export class TestCandidatePreviewComponent implements OnChanges {
     }
 
     getSeverity(type: string): any {
-        switch(type) {
+        switch (type) {
             case 'QCU': return 'info';
             case 'QCM': return 'warn';
             case 'TRUE_FALSE': return 'success';

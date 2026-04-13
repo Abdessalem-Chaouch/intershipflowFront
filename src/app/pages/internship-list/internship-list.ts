@@ -1,4 +1,4 @@
-import { Component, OnInit, Signal } from '@angular/core';
+import { Component, OnInit, Signal, inject, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TableModule } from 'primeng/table';
 import { ButtonModule } from 'primeng/button';
@@ -14,6 +14,8 @@ import { FormsModule } from '@angular/forms';
 import { RippleModule } from 'primeng/ripple';
 import { InternshipService, InternshipOffer, InternshipApplication } from '@/app/services/internship.service';
 import { CandidatureService } from '@/app/services/candidature.service';
+import { TestService, TechnicalTest } from '@/app/services/test.service';
+import { TestTakeComponent } from '../test-take.component';
 
 import { TopbarWidget } from '../landing/components/topbarwidget.component';
 import { FooterWidget } from '../landing/components/footerwidget';
@@ -21,7 +23,7 @@ import { FooterWidget } from '../landing/components/footerwidget';
 @Component({
     selector: 'app-internship-list',
     standalone: true,
-    imports: [CommonModule, TableModule, ButtonModule, TagModule, InputTextModule, IconFieldModule, InputIconModule, DialogModule, FileUploadModule, ToastModule, FormsModule, RippleModule, TopbarWidget, FooterWidget],
+    imports: [CommonModule, TableModule, ButtonModule, TagModule, InputTextModule, IconFieldModule, InputIconModule, DialogModule, FileUploadModule, ToastModule, FormsModule, RippleModule, TopbarWidget, FooterWidget, TestTakeComponent],
     providers: [MessageService, CandidatureService],
     styles: [`
         .stage-card {
@@ -33,6 +35,38 @@ import { FooterWidget } from '../landing/components/footerwidget';
         .stage-card:hover {
             transform: translateY(-8px) scale(1.01);
             box-shadow: 0 30px 40px -15px rgba(6, 57, 112, 0.15);
+        }
+
+        .offer-title {
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            height: 4rem;
+            line-height: 2rem;
+        }
+
+        .offer-description {
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            height: 5.25rem;
+            line-height: 1.75rem;
+            overflow-wrap: break-word;
+            word-wrap: break-word;
+            word-break: break-word;
+            hyphens: auto;
+        }
+
+        .tech-list {
+            height: 12rem;
+            overflow-y: auto;
+            scrollbar-width: none;
+        }
+
+        .tech-list::-webkit-scrollbar {
+            display: none;
         }
         
         @keyframes pulse-badge {
@@ -98,15 +132,14 @@ import { FooterWidget } from '../landing/components/footerwidget';
                              [ngClass]="offer.highlight ? 'bg-[#063970] dark:bg-blue-600 border-2 border-white/20 shadow-xl' : 'bg-white dark:bg-[#063970] border border-gray-100 dark:border-blue-800/40 shadow-md'"
                              class="stage-card p-10 rounded-3xl cursor-pointer transition-all">
                             
-                            <div class="flex items-center justify-between mb-8">
-                                <div [ngClass]="offer.highlight ? 'text-white' : 'text-[#063970] dark:text-blue-50'" class="text-2xl font-bold">{{offer.title}}</div>
+                            <div class="flex items-start justify-between mb-8">
+                                <div [ngClass]="offer.highlight ? 'text-white' : 'text-[#063970] dark:text-blue-50'" class="text-2xl font-bold offer-title">{{offer.title}}</div>
                                 <span 
-                                    class="text-xs font-semibold py-1 px-3 rounded-full"
+                                    class="text-xs font-semibold py-1 px-3 rounded-full mt-2"
                                     [ngClass]="[
-                                        offer.highlight ? 'badge-pulse bg-white/20 text-white' : '',
-                                        !offer.highlight ? 'bg-green-100 dark:bg-green-400/20 text-green-700 dark:text-green-300' : ''
+                                        isExpired(offer.dateFin) ? 'bg-red-100 dark:bg-red-400/20 text-red-700 dark:text-red-300' : (offer.highlight ? 'badge-pulse bg-white/20 text-white' : 'bg-green-100 dark:bg-green-400/20 text-green-700 dark:text-green-300')
                                     ]">
-                                    {{offer.badge}}
+                                    {{ isExpired(offer.dateFin) ? 'Fermé' : offer.badge }}
                                 </span>
                             </div>
 
@@ -121,11 +154,11 @@ import { FooterWidget } from '../landing/components/footerwidget';
                                 </div>
                             </div>
 
-                            <p [ngClass]="offer.highlight ? 'text-blue-100' : 'text-gray-600 dark:text-blue-100/70'" class="leading-relaxed mb-8 text-lg">
+                            <p [ngClass]="offer.highlight ? 'text-blue-100' : 'text-gray-600 dark:text-blue-100/70'" class="leading-relaxed mb-8 text-lg offer-description">
                                 {{offer.details || offer.desc}}
                             </p>
 
-                            <ul class="list-none p-0 flex flex-col gap-4 mb-10">
+                            <ul class="list-none p-0 flex flex-col gap-4 mb-10 tech-list">
                                 <li *ngFor="let tech of offer.techs" 
                                     [ngClass]="offer.highlight ? 'text-white' : 'text-gray-700 dark:text-blue-100/80'"
                                     class="flex items-center gap-3">
@@ -148,10 +181,15 @@ import { FooterWidget } from '../landing/components/footerwidget';
                                         pTooltip="Plus d'infos"
                                         (click)="openDetailsDialog(offer)"></button>
 
-                                <button pButton pRipple [label]="offer.highlight ? 'Postuler maintenant' : 'Postuler'" 
+                                <button *ngIf="!isExpired(offer.dateFin)"
+                                        pButton pRipple [label]="offer.highlight ? 'Postuler maintenant' : 'Postuler'" 
                                         [class]="offer.highlight ? '!bg-transparent !text-white !border-2 !border-white hover:!bg-white/10' : 'bg-[#063970] dark:bg-blue-400 text-white dark:text-surface-900 border-none hover:bg-blue-900 dark:hover:bg-blue-300'"
                                         class="flex-1 font-bold rounded-2xl py-4 transition-all text-lg"
                                         (click)="openApplyDialog(offer)"></button>
+                                
+                                <button *ngIf="isExpired(offer.dateFin)"
+                                        pButton pRipple label="Fermé" [disabled]="true"
+                                        class="flex-1 font-bold rounded-2xl py-4 transition-all text-lg bg-slate-200 dark:bg-slate-800 text-slate-400 border-none"></button>
                             </div>
                         </div>
                     </div>
@@ -166,39 +204,43 @@ import { FooterWidget } from '../landing/components/footerwidget';
                   [modal]="true" 
                   [draggable]="false"
                   [resizable]="false"
-                  [dismissableMask]="true"
+                  [dismissableMask]="false"
                   styleClass="modern-dialog"
-                  [style]="{ width: 'min(550px, 95vw)' }">
+                  [style]="{ width: applyStep === 2 ? 'min(900px, 98vw)' : 'min(550px, 95vw)' }">
             
             <ng-template pTemplate="header">
-                <div class="flex flex-col gap-1">
-                    <h5 class="m-0 text-2xl font-black text-slate-800 tracking-tight">Postuler à l'offre</h5>
-                    <p class="text-xs text-slate-400 font-medium uppercase tracking-widest">{{ selectedOffer?.title }}</p>
+                <div class="flex items-center justify-between w-full">
+                    <div class="flex flex-col gap-1">
+                        <h5 class="m-0 text-2xl font-black text-slate-800 tracking-tight">
+                            Dossier de candidature
+                        </h5>
+                        <p class="text-xs text-slate-400 font-medium uppercase tracking-widest">{{ selectedOffer?.title }}</p>
+                    </div>
+                    <div class="flex items-center gap-2 mr-6">
+                        <div [class]="applyStep >= 1 ? 'bg-[#063970] text-white' : 'bg-slate-100'" class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold">1</div>
+                        <div [class]="applyStep >= 2 ? 'bg-[#063970]' : 'bg-slate-100'" class="w-6 h-[2px]"></div>
+                        <div [class]="applyStep >= 2 ? 'bg-[#063970] text-white' : 'bg-slate-100'" class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold">2</div>
+                    </div>
                 </div>
             </ng-template>
 
             <ng-template pTemplate="content">
-                <div class="flex flex-col gap-6 py-6 px-2">
+                <!-- STEP 1: INFORMATIONS -->
+                <div *ngIf="applyStep === 1" class="flex flex-col gap-6 py-6 px-2">
                     <!-- Section Infos Perso -->
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div class="flex flex-col gap-2">
                             <label for="firstName" class="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Prénom</label>
-                            <div class="relative">
-                                <input id="firstName" type="text" pInputText [(ngModel)]="applicationForm.firstName" 
-                                       placeholder="Votre prénom" class="w-full pl-10 h-12 border-slate-200 rounded-xl focus:ring-slate-800" />
-                            </div>
+                            <input id="firstName" type="text" pInputText [(ngModel)]="applicationForm.firstName" 
+                                   placeholder="Votre prénom" class="w-full h-12 border-slate-200 rounded-xl focus:ring-slate-800" />
                         </div>
                         <div class="flex flex-col gap-2">
                             <label for="lastName" class="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Nom</label>
-                            <div class="relative">
-                                <input id="lastName" type="text" pInputText [(ngModel)]="applicationForm.lastName" 
-                                       placeholder="votre nom" class="w-full pl-10 h-12 border-slate-200 rounded-xl focus:ring-slate-800" />
-                            </div>
+                            <input id="lastName" type="text" pInputText [(ngModel)]="applicationForm.lastName" 
+                                   placeholder="Votre nom" class="w-full h-12 border-slate-200 rounded-xl focus:ring-slate-800" />
                         </div>
                     </div>
                     
-                    <div class="h-px bg-slate-100 my-2"></div>
-
                     <!-- Section Documents -->
                     <div class="flex flex-col gap-5">
                         <div class="flex flex-col gap-2">
@@ -234,17 +276,53 @@ import { FooterWidget } from '../landing/components/footerwidget';
                         </div>
                     </div>
                 </div>
+
+                <!-- STEP 2: TEST TECHNIQUE -->
+                <div *ngIf="applyStep === 2" class="py-4">
+                    <app-test-take [test]="assignedTest" 
+                                 [candidateInfo]="{firstName: applicationForm.firstName, lastName: applicationForm.lastName, candidatureId: createdCandidatureId!}"
+                                 (onTestCompleted)="onTestCompleted($event)" />
+                </div>
+
+                <!-- STEP 3: CONFIRMATION -->
+                <div *ngIf="applyStep === 3" class="flex flex-col items-center justify-center py-16 gap-6">
+                    <div class="w-24 h-24 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center text-5xl shadow-inner animate-bounce">
+                        <i class="pi pi-check-circle"></i>
+                    </div>
+                    <div class="text-center">
+                        <h4 class="text-2xl font-black text-slate-800 m-0">Test Formaté avec Succès !</h4>
+                        <p class="text-slate-500 font-medium mt-2">Score obtenu : <span class="text-[#063970] font-black text-xl">{{ testResult?.score }}%</span></p>
+                        <p-tag [value]="testResult?.passed ? 'Admis à l étape suivante' : 'Score insuffisant'" 
+                               [severity]="testResult?.passed ? 'success' : 'danger'" styleClass="px-4 py-2 mt-2" />
+                    </div>
+                </div>
             </ng-template>
 
             <ng-template pTemplate="footer">
                 <div class="flex items-center justify-between w-full p-4 border-t border-slate-50 bg-slate-50/50 rounded-b-3xl">
-                    <p-button label="Plus tard" icon="pi pi-times" [text]="true" severity="secondary" (onClick)="applyDialog = false" />
-                    <p-button label="Envoyer ma candidature" 
-                             icon="pi pi-send"
-                             [disabled]="!isFormValid() || isSubmitting" 
-                             (onClick)="submitApplication()" 
-                             [loading]="isSubmitting" 
+                    <div class="flex gap-2">
+                        <p-button label="Annuler" icon="pi pi-times" [text]="true" severity="secondary" (onClick)="applyDialog = false" />
+                        <p-button *ngIf="applyStep === 2" 
+                                 label="Retour aux documents" 
+                                 icon="pi pi-arrow-left" 
+                                 [text]="true" 
+                                 severity="secondary" 
+                                 (onClick)="applyStep = 1" />
+                    </div>
+                    
+                    <p-button *ngIf="applyStep === 1" 
+                             label="Continuer vers le test" 
+                             icon="pi pi-arrow-right" iconPos="right"
+                             [disabled]="!isFormValid()" 
+                             (onClick)="goToTestStep()" 
                              styleClass="!bg-slate-800 !border-none !rounded-xl !px-6 !py-3 !font-bold" />
+
+                    <p-button *ngIf="applyStep === 3" 
+                             label="Envoyer ma candidature" 
+                             icon="pi pi-send"
+                             [loading]="isSubmitting" 
+                             (onClick)="submitApplication()" 
+                             styleClass="!bg-[#063970] !border-none !rounded-xl !px-8 !py-4 !font-black !text-lg shadow-lg" />
                 </div>
             </ng-template>
         </p-dialog>
@@ -265,7 +343,9 @@ import { FooterWidget } from '../landing/components/footerwidget';
                     </div>
                     <div>
                         <h5 class="m-0 text-2xl font-black text-slate-800 tracking-tight">{{ selectedOffer?.title }}</h5>
-                        <p-tag [value]="selectedOffer?.badge" severity="success" styleClass="text-[10px] font-black uppercase mt-1 px-3" />
+                        <p-tag [value]="isExpired(selectedOffer?.dateFin) ? 'Fermé' : selectedOffer?.badge" 
+                               [severity]="isExpired(selectedOffer?.dateFin) ? 'danger' : 'success'" 
+                               styleClass="text-[10px] font-black uppercase mt-1 px-3" />
                     </div>
                 </div>
             </ng-template>
@@ -300,8 +380,8 @@ import { FooterWidget } from '../landing/components/footerwidget';
 
                             <div class="flex flex-col gap-4 px-2">
                                 <div class="flex items-center gap-3">
-                                    <i class="pi pi-clock text-blue-500 font-bold"></i>
-                                    <span class="text-sm font-bold text-slate-700">Durée : {{ selectedOffer?.duration }}</span>
+                                    <i class="pi pi-calendar-times text-blue-500 font-bold"></i>
+                                    <span class="text-sm font-bold text-slate-700">Date d'expiration : {{ selectedOffer?.dateFin | date:'dd/MM/yyyy' }}</span>
                                 </div>
                                 <div class="flex items-center gap-3">
                                     <i class="pi pi-map-marker text-red-500 font-bold"></i>
@@ -325,11 +405,17 @@ import { FooterWidget } from '../landing/components/footerwidget';
             <ng-template pTemplate="footer">
                 <div class="flex items-center justify-between w-full p-4 border-t border-slate-50 bg-slate-50/50 rounded-b-3xl">
                     <p-button label="Fermer" [text]="true" severity="secondary" (onClick)="detailsDialog = false" />
-                    <p-button label="Postuler à ce stage" 
+                    <p-button *ngIf="!isExpired(selectedOffer?.dateFin)"
+                             label="Postuler à ce stage" 
                              icon="pi pi-arrow-right"
                              iconPos="right"
                              (onClick)="detailsDialog = false; openApplyDialog(selectedOffer)" 
                              styleClass="!bg-[#063970] !border-none !rounded-xl !px-6 !py-3 !font-bold" />
+                    <p-button *ngIf="isExpired(selectedOffer?.dateFin)"
+                             label="Offre expirée" 
+                             icon="pi pi-lock"
+                             [disabled]="true"
+                             styleClass="!bg-slate-300 !text-slate-500 !border-none !rounded-xl !px-6 !py-3 !font-bold" />
                 </div>
             </ng-template>
         </p-dialog>
@@ -353,11 +439,19 @@ export class InternshipList implements OnInit {
         letterFile: null as File | null
     };
 
+    private cdr = inject(ChangeDetectorRef);
+
     constructor(
         private internshipService: InternshipService,
         private candidatureService: CandidatureService,
+        private testService: TestService,
         private messageService: MessageService
     ) {}
+
+    applyStep = 1;
+    assignedTest: TechnicalTest | null = null;
+    testResult: { score: number, passed: boolean } | null = null;
+    createdCandidatureId: number | null = null;
 
     ngOnInit() {
         this.offers = this.internshipService.getOffers();
@@ -382,10 +476,58 @@ export class InternshipList implements OnInit {
         }
     }
 
+    isExpired(dateFin: any): boolean {
+        if (!dateFin) return false;
+        const end = new Date(dateFin);
+        const now = new Date();
+        return end < now;
+    }
+
     openApplyDialog(offer: any) {
         this.selectedOffer = offer;
         this.applicationForm = { firstName: '', lastName: '', cvFile: null, letterFile: null };
+        this.applyStep = 1;
+        this.testResult = null;
+        this.assignedTest = null;
         this.applyDialog = true;
+    }
+
+    async goToTestStep() {
+        if (!this.selectedOffer || !this.isFormValid()) return;
+
+        this.isSubmitting = true;
+        try {
+            // Create the candidature first to get its ID for the test attempt
+            const created = await this.candidatureService.create(
+                parseInt(this.selectedOffer.id),
+                this.applicationForm.lastName,
+                this.applicationForm.firstName,
+                this.applicationForm.cvFile!,
+                this.applicationForm.letterFile!
+            );
+            this.createdCandidatureId = created.id;
+
+            if (!this.selectedOffer?.selectedTestId) {
+                // No test: go straight to confirmation
+                this.applyStep = 3;
+                this.testResult = { score: 0, passed: false };
+                this.cdr.detectChanges();
+                return;
+            }
+
+            this.assignedTest = await this.testService.getTestById(this.selectedOffer.selectedTestId);
+            this.applyStep = 2;
+            this.cdr.detectChanges();
+        } catch (err) {
+            this.messageService.add({ severity: 'error', summary: 'Erreur', detail: 'Impossible de soumettre le dossier ou de charger le test.' });
+        } finally {
+            this.isSubmitting = false;
+        }
+    }
+
+    onTestCompleted(result: { score: number, passed: boolean }) {
+        this.testResult = result;
+        this.applyStep = 3;
     }
 
     openDetailsDialog(offer: any) {
@@ -409,38 +551,14 @@ export class InternshipList implements OnInit {
     }
 
     async submitApplication() {
-        if (!this.selectedOffer) return;
-        
-        this.isSubmitting = true;
-        try {
-            await this.candidatureService.create(
-                parseInt(this.selectedOffer.id),
-                this.applicationForm.lastName,
-                this.applicationForm.firstName,
-                this.applicationForm.cvFile!,
-                this.applicationForm.letterFile!
-            );
-            
-            this.messageService.add({ 
-                severity: 'success', 
-                summary: 'Candidature envoyée', 
-                detail: `Votre dossier pour "${this.selectedOffer.title}" a été transmis avec succès.`, 
-                life: 5000 
-            });
-            
-            this.applyDialog = false;
-            // Optionally refresh applications if service has a list
-            this.internshipService.fetchOffers(); 
-        } catch (err) {
-            console.error('Submit Error:', err);
-            this.messageService.add({ 
-                severity: 'error', 
-                summary: 'Erreur', 
-                detail: 'Une erreur est survenue lors de l\'envoi de votre candidature.', 
-                life: 5000 
-            });
-        } finally {
-            this.isSubmitting = false;
-        }
+        // Candidature already created in goToTestStep(); just close the dialog
+        this.messageService.add({ 
+            severity: 'success', 
+            summary: 'Candidature envoyée', 
+            detail: `Votre dossier pour "${this.selectedOffer?.title}" a été transmis avec succès.`, 
+            life: 5000 
+        });
+        this.applyDialog = false;
+        this.internshipService.fetchOffers();
     }
 }
