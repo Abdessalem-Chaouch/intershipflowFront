@@ -3,11 +3,109 @@
 @use '@/assets/layout/layout.scss';
 @use '@/assets/demo/demo.scss';
 
+/* Global Dark Mode Background */
+:is(html.app-dark, body.app-dark) {
+    background-color: #021427 !important;
+}
+
 .logout-item {
     .p-menuitem-link {
-        .p-menuitem-text, .p-menuitem-icon {
-            color: #ef4444 !important; /* text-red-500 */
+
+        .p-menuitem-text,
+        .p-menuitem-icon {
+            color: #ef4444 !important;
+            /* text-red-500 */
             font-weight: 700 !important;
         }
     }
+}
+
+/* Modern Dialog Styles */
+.modern-dialog {
+    border-radius: 2rem !important;
+    overflow: hidden;
+    border: none !important;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25) !important;
+
+    /* Dark Mode for Modern Dialog - Force background even if appended to body */
+    :is(html.app-dark, body.app-dark, .app-dark) &,
+    :is(html.app-dark, body.app-dark, .app-dark) &.p-dialog,
+    :is(html.app-dark, body.app-dark, .app-dark) & .p-dialog-header,
+    :is(html.app-dark, body.app-dark, .app-dark) & .p-dialog-content,
+    :is(html.app-dark, body.app-dark, .app-dark) & .p-dialog-footer {
+        background-color: #063970 !important;
+        background: #063970 !important;
+        color: #eff6ff !important;
+        border-color: rgba(255, 255, 255, 0.1) !important;
+    }
+
+    :is(html.app-dark, body.app-dark, .app-dark) & {
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5) !important;
+
+        .p-dialog-header {
+            .p-dialog-header-close {
+                color: #eff6ff !important;
+
+                &:hover {
+                    background: rgba(255, 255, 255, 0.1) !important;
+                }
+            }
+        }
+    }
+
+    .p-dialog-header {
+        padding: 2rem 2rem 1rem 2rem !important;
+        background: white !important;
+        color: #1e293b !important;
+    }
+
+    .p-dialog-content {
+        padding: 0 2rem 2rem 2rem !important;
+        background: white !important;
+    }
+
+    .p-dialog-footer {
+        padding: 0 !important;
+        background: white !important;
+        border-bottom-left-radius: 2rem !important;
+        border-bottom-right-radius: 2rem !important;
+    }
+
+    .p-inputtext {
+        transition: all 0.2s ease;
+    }
+}
+
+/* Dark Mode for Modern Dialog */
+.dark .modern-dialog {
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5) !important;
+}
+
+/* HEADER */
+.dark .modern-dialog .p-dialog-header {
+    background: #063970 !important;
+    color: #eff6ff !important;
+    border-bottom: 1px solid rgba(59, 130, 246, 0.2) !important;
+}
+
+/* CLOSE BUTTON */
+.dark .modern-dialog .p-dialog-header .p-dialog-header-close {
+    color: #eff6ff !important;
+}
+
+.dark .modern-dialog .p-dialog-header .p-dialog-header-close:hover {
+    background: rgba(255, 255, 255, 0.1) !important;
+}
+
+/* CONTENT */
+.dark .modern-dialog .p-dialog-content {
+    background: #021427 !important;
+    /* plus cohérent dark mode */
+    color: #e5f0ff !important;
+}
+
+/* FOOTER */
+.dark .modern-dialog .p-dialog-footer {
+    background: #06284d !important;
+    border-top: 1px solid rgba(59, 130, 246, 0.2) !important;
 }

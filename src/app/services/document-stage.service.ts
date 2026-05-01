@@ -12,6 +12,19 @@ export interface DocumentStage {
     noteEncadrant?: number;
     remarqueEncadrant?: string;
     validationEncadrant?: boolean;
+    idStage?: number;
+    userId?: string;
+    username?: string;
+    firstName?: string;
+    lastName?: string;
+    photoUrl?: string;
+    titreOffre?: string;
+}
+
+export interface ApiResponse<T> {
+    status: number;
+    message: string;
+    data: T;
 }
 
 @Injectable({
@@ -23,23 +36,33 @@ export class DocumentStageService {
     
     private documents = signal<DocumentStage[]>([]);
 
-    constructor() {
-        this.fetchDocuments();
-    }
+    constructor() {}
 
     getDocuments() {
         return this.documents;
     }
 
     fetchDocuments() {
-        this.http.get<DocumentStage[]>(this.apiUrl).subscribe({
-            next: (data) => this.documents.set(data),
+        this.http.get<ApiResponse<DocumentStage[]>>(this.apiUrl).subscribe({
+            next: (response) => this.documents.set(response.data),
             error: (err) => console.error('Error fetching documents', err)
         });
     }
 
+    fetchDocumentsEncadrant() {
+        this.http.get<any>(`${this.apiUrl}/encadrant`).subscribe({
+            next: (response) => {
+                // Handle both wrapped ApiResponse and direct array response
+                const data = response && response.data !== undefined ? response.data : response;
+                this.documents.set(Array.isArray(data) ? data : []);
+            },
+            error: (err) => console.error('Error fetching encadrant documents', err)
+        });
+    }
+
     async getById(id: number): Promise<DocumentStage> {
-        return await firstValueFrom(this.http.get<DocumentStage>(`${this.apiUrl}/${id}`));
+        const response = await firstValueFrom(this.http.get<ApiResponse<DocumentStage>>(`${this.apiUrl}/${id}`));
+        return response.data;
     }
 
     async createDocument(type: TypeDocument, file: File): Promise<DocumentStage> {
@@ -47,9 +70,9 @@ export class DocumentStageService {
         formData.append('type', type);
         formData.append('file', file);
 
-        const saved = await firstValueFrom(this.http.post<DocumentStage>(this.apiUrl, formData));
+        const response = await firstValueFrom(this.http.post<ApiResponse<DocumentStage>>(this.apiUrl, formData));
         this.fetchDocuments();
-        return saved;
+        return response.data;
     }
 
     async updateDocument(id: number, type?: TypeDocument, note?: number, validation?: boolean, remarque?: string, file?: File): Promise<DocumentStage> {
@@ -60,37 +83,61 @@ export class DocumentStageService {
         if (remarque) formData.append('remarque', remarque);
         if (file) formData.append('file', file);
 
-        const updated = await firstValueFrom(this.http.put<DocumentStage>(`${this.apiUrl}/${id}`, formData));
+        const response = await firstValueFrom(this.http.put<ApiResponse<DocumentStage>>(`${this.apiUrl}/${id}`, formData));
         this.fetchDocuments();
-        return updated;
+        return response.data;
     }
 
-    async toggleValidation(id: number): Promise<DocumentStage> {
-        const updated = await firstValueFrom(this.http.put<DocumentStage>(`${this.apiUrl}/${id}/validation`, {}));
-        this.fetchDocuments();
-        return updated;
+    async getMesDocuments(): Promise<DocumentStage[]> {
+        const response = await firstValueFrom(this.http.get<ApiResponse<DocumentStage[]>>(`${this.apiUrl}/mes-documents`));
+        return response.data;
+    }
+
+    async getDocumentsByStage(stageId: number): Promise<DocumentStage[]> {
+        const response = await firstValueFrom(this.http.get<ApiResponse<DocumentStage[]>>(`${this.apiUrl}/stage/${stageId}`));
+        return response.data;
+    }
+
+    async validerDocument(id: number): Promise<DocumentStage> {
+        const response = await firstValueFrom(this.http.put<ApiResponse<DocumentStage>>(`${this.apiUrl}/${id}/validation`, {}));
+        return response.data;
+    }
+
+    async invaliderDocument(id: number): Promise<DocumentStage> {
+        const response = await firstValueFrom(this.http.put<ApiResponse<DocumentStage>>(`${this.apiUrl}/${id}/invalidation`, {}));
+        return response.data;
     }
 
     async updateNote(id: number, note: number): Promise<DocumentStage> {
-        // Use params for @RequestParam Double note
-        const updated = await firstValueFrom(this.http.put<DocumentStage>(`${this.apiUrl}/${id}/note`, null, {
+        const response = await firstValueFrom(this.http.put<ApiResponse<DocumentStage>>(`${this.apiUrl}/${id}/note`, null, {
             params: { note: note.toString() }
         }));
-        this.fetchDocuments();
-        return updated;
+        return response.data;
     }
 
     async addRemarque(id: number, remarque: string): Promise<DocumentStage> {
-        const updated = await firstValueFrom(this.http.put<DocumentStage>(`${this.apiUrl}/${id}/remarque`, null, {
+        const response = await firstValueFrom(this.http.put<ApiResponse<DocumentStage>>(`${this.apiUrl}/${id}/remarque`, null, {
             params: { remarque }
         }));
-        this.fetchDocuments();
-        return updated;
+        return response.data;
     }
 
-    downloadFile(nodeId: string, fileName: string) {
+    async downloadFile(nodeId: string, fileName: string) {
         const url = `${this.apiUrl}/download/${nodeId}?fileName=${encodeURIComponent(fileName)}`;
-        window.open(url, '_blank');
+        try {
+            const blob = await firstValueFrom(this.http.get(url, { responseType: 'blob' }));
+            const downloadUrl = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = downloadUrl;
+            link.download = fileName;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(downloadUrl);
+        } catch (err) {
+            console.error('Error downloading file', err);
+            // Fallback or error notification could be added here
+        }
     }
 
     async deleteDocument(id: number): Promise<void> {

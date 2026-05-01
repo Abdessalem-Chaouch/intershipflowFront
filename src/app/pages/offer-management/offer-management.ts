@@ -139,15 +139,20 @@ interface ExercicePrep {
                     </td>
                     <td>
                         <div class="flex items-center gap-2">
-                            <p-tag 
-                                [value]="(offer.testCount || 0).toString() + ' tests'" 
-                                [severity]="(offer.testCount || 0) > 0 ? 'info' : 'secondary'" 
-                                class="cursor-pointer hover:opacity-80 transition-opacity"
-                                (click)="viewTests(offer)"
-                                pTooltip="Voir les tests associés"
-                                tooltipPosition="top"
-                            />
-                            <p-button icon="pi pi-plus" [text]="true" [rounded]="true" size="small" [style]="{ 'color': '#063970' }" (onClick)="openAddTestChoice(offer)" pTooltip="Gérer les tests" tooltipPosition="top" />
+                            <p-button icon="pi pi-plus" [text]="true" [rounded]="true" size="small" [style]="{ 'color': '#C0C0C0' }" (onClick)="openAddTestChoice(offer)" pTooltip="Gérer les tests" tooltipPosition="top" />
+                            <button 
+                            pButton
+                            type="button"
+                            class="p-button p-button-outlined p-button-secondary flex items-center gap-2"
+                            (click)="viewTests(offer)"
+                            pTooltip="Voir les tests associés"
+                            size="small"
+                            tooltipPosition="top">
+
+                            <i class="fa-regular fa-file-lines"></i>
+                            <span>{{ offer.testCount || 0 }}</span>
+                            <span>tests</span>
+</button>
                         </div>
                     </td>
                     <td class="text-center">
@@ -510,9 +515,9 @@ interface ExercicePrep {
         </p-dialog>
 
         <!-- Test Choice Dialog -->
-        <p-dialog [(visible)]="addTestChoiceDialog" [style]="{ width: '510px' }" header="Ajouter un test technique" [modal]="true">
-            <div class="grid grid-cols-2 gap-4 py-4">
-                <div (click)="openAssignTestFromChoice()" 
+        <p-dialog [(visible)]="addTestChoiceDialog" [style]="{ width: '750px' }" header="Ajouter un test technique" [modal]="true">
+            <div class="grid grid-cols-3 gap-4 py-4">
+                <div (click)="openAssignTestFromChoice()" [class.opacity-50]="isGeneratingQuickIA" [class.pointer-events-none]="isGeneratingQuickIA"
                      class="cursor-pointer p-6 rounded-2xl border-2 border-slate-100 hover:border-blue-500 hover:bg-blue-50/20 transition-all flex flex-col items-center gap-4 group">
                     <div class="w-16 h-16 rounded-2xl bg-blue-100 text-blue-600 flex items-center justify-center transition-transform group-hover:scale-110">
                         <i class="pi pi-list text-2xl"></i>
@@ -523,7 +528,7 @@ interface ExercicePrep {
                     </div>
                 </div>
 
-                <div (click)="openNewTestWizard()" 
+                <div (click)="openNewTestWizard()" [class.opacity-50]="isGeneratingQuickIA" [class.pointer-events-none]="isGeneratingQuickIA"
                      class="cursor-pointer p-6 rounded-2xl border-2 border-slate-100 hover:border-indigo-500 hover:bg-indigo-50/20 transition-all flex flex-col items-center gap-4 group">
                     <div class="w-16 h-16 rounded-2xl bg-indigo-100 text-indigo-600 flex items-center justify-center transition-transform group-hover:scale-110">
                         <i class="pi pi-pencil text-2xl"></i>
@@ -531,6 +536,18 @@ interface ExercicePrep {
                     <div class="text-center">
                         <span class="font-black text-slate-800 text-sm block">Nouveau test</span>
                         <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-loose">Créer de zéro</span>
+                    </div>
+                </div>
+
+                <div (click)="generateQuickTestIA()" [class.opacity-50]="isGeneratingQuickIA" [class.pointer-events-none]="isGeneratingQuickIA"
+                     class="cursor-pointer p-6 rounded-2xl border-2 border-slate-100 hover:border-purple-500 hover:bg-purple-50/20 transition-all flex flex-col items-center gap-4 group relative">
+                    <div class="w-16 h-16 rounded-2xl bg-purple-100 text-purple-600 flex items-center justify-center transition-transform group-hover:scale-110">
+                        <i class="pi pi-bolt text-2xl" *ngIf="!isGeneratingQuickIA"></i>
+                        <i class="pi pi-spinner pi-spin text-2xl" *ngIf="isGeneratingQuickIA"></i>
+                    </div>
+                    <div class="text-center">
+                        <span class="font-black text-slate-800 text-sm block">Générer avec IA</span>
+                        <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-loose">Création automatique</span>
                     </div>
                 </div>
             </div>
@@ -1003,6 +1020,7 @@ export class OfferManagement implements OnInit {
     testDialog: boolean = false;
     newTest: Partial<TechnicalTest> = {};
     testSubmitted: boolean = false;
+    isGeneratingQuickIA: boolean = false;
 
     // ─── Advanced Test Wizard State ─────────────────────────────
     testWizardDialog = false;
@@ -1204,7 +1222,7 @@ export class OfferManagement implements OnInit {
     async saveQuickTest() {
         this.testSubmitted = true;
         if (this.newTest.titre?.trim() && this.newTest.description?.trim()) {
-            await this.testService.addTest({
+            const savedQuickTest = await this.testService.addTest({
                 titre: this.newTest.titre,
                 description: this.newTest.description,
                 dureeMinutes: this.newTest.dureeMinutes || 60,
@@ -1233,6 +1251,54 @@ export class OfferManagement implements OnInit {
 
             this.testDialog = false;
             this.newTest = {};
+        }
+    }
+
+    async generateQuickTestIA() {
+        if (!this.selectedOfferForTest || !this.selectedOfferForTest.id) {
+            this.messageService.add({ severity: 'error', summary: 'Erreur', detail: 'Aucune offre sélectionnée.', life: 3000 });
+            return;
+        }
+
+        this.messageService.add({ severity: 'info', summary: 'Génération', detail: 'L\'IA génère votre test, merci de patienter...', life: 5000 });
+        this.isGeneratingQuickIA = true;
+        try {
+            await this.testService.generateFromOffre(this.selectedOfferForTest.id);
+
+            // Re-fetch exercices and questions so they appear when user previews the generated test
+            this.exerciceService.fetchExercices();
+            this.questionService.fetchQuestions();
+
+            const currentCount = this.selectedOfferForTest.testCount || 0;
+            const nextCount = currentCount + 1;
+
+            const updatedOffer = {
+                ...this.selectedOfferForTest,
+                testCount: nextCount
+            };
+
+            await this.internshipService.updateOffer(updatedOffer);
+            this.selectedOfferForTest.testCount = nextCount;
+
+            // Update associated tests local state if view is active
+            const newTests = await this.testService.getTestsByOffer(this.selectedOfferForTest.id);
+            this.associatedTests.set(newTests); // Sync with new tests directly if needed, or rely on existing state
+
+            this.messageService.add({
+                severity: 'success',
+                summary: 'Test Généré',
+                detail: 'Un nouveau test a été généré par l\'IA et ajouté à ' + this.selectedOfferForTest.title,
+                life: 3000
+            });
+
+            this.testDialog = false;
+            this.addTestChoiceDialog = false; // Close the choice dialog
+            this.newTest = {};
+        } catch (err) {
+            console.error('Erreur lors de la génération IA', err);
+            this.messageService.add({ severity: 'error', summary: 'Erreur', detail: 'Échec de la génération du test par IA.', life: 3000 });
+        } finally {
+            this.isGeneratingQuickIA = false;
         }
     }
 
@@ -1492,7 +1558,35 @@ export class OfferManagement implements OnInit {
                         });
                         exId = newExId;
                     }
+
+                    // Save nested questions
+                    for (const q of exPrep.questions) {
+                        if (q.mode === 'new') {
+                            const newQ: any = { enonce: q.enonce!, typeQuestion: q.typeQuestion!, exerciceId: exId };
+                            if (q.typeQuestion === 'QCU' || q.typeQuestion === 'QCM') {
+                                newQ.propositions = (q.propositions || []).map((p: any) => p.text);
+                                newQ.reponsesCorrectes = (q.propositions || []).filter((p: any) => p.isCorrect).map((p: any) => p.text);
+                            } else if (q.typeQuestion === 'TRUE_FALSE') {
+                                newQ.propositions = ['Vrai', 'Faux'];
+                                newQ.reponsesCorrectes = [q.selectedTrueFalse || 'Vrai'];
+                            } else {
+                                newQ.propositions = [];
+                                newQ.reponsesCorrectes = [q.reponseLibre || ''];
+                            }
+                            await this.questionService.addQuestion(newQ);
+                        } else {
+                            const existingQ = this.getQuestionById(q.existingQuestionId!);
+                            if (existingQ && exId) {
+                                const currentExIds = existingQ.exerciceIds || [];
+                                const updatedExIds = currentExIds.includes(exId) ? currentExIds : [...currentExIds, exId];
+                                await this.questionService.updateQuestion({ ...existingQ, exerciceIds: updatedExIds });
+                            }
+                        }
+                    }
                 }
+
+                this.exerciceService.fetchExercices();
+                this.questionService.fetchQuestions();
 
                 // Update UI - Count
                 if (this.selectedOfferForTest) {

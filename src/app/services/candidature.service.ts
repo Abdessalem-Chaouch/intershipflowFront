@@ -15,6 +15,7 @@ export interface CandidatureResponseDto {
     approvedByAI: boolean;
     scoreAI: number;
     offreStageId: number;
+    raisonRefus?: string;
 }
 
 @Injectable({
@@ -75,14 +76,21 @@ export class CandidatureService {
         await this.fetchAll();
     }
 
-    async accepter(id: number) {
-        const res = await firstValueFrom(this.http.put<CandidatureResponseDto>(`${this.apiUrl}/${id}/accepter`, {}));
+    async accepter(id: number, dateDebut?: string, dateFin?: string, encadrantId?: string) {
+        let params: any = {};
+        if (dateDebut) params.dateDebut = dateDebut;
+        if (dateFin) params.dateFin = dateFin;
+        if (encadrantId) params.encadrantId = encadrantId;
+
+        const res = await firstValueFrom(this.http.put<any>(`${this.apiUrl}/${id}/accepter`, null, { params }));
         await this.fetchAll();
         return res;
     }
 
-    async refuser(id: number) {
-        const res = await firstValueFrom(this.http.put<CandidatureResponseDto>(`${this.apiUrl}/${id}/refuser`, {}));
+    async refuser(id: number, raison: string) {
+        const res = await firstValueFrom(this.http.put<any>(`${this.apiUrl}/${id}/refuser`, null, { 
+            params: { raison } 
+        }));
         await this.fetchAll();
         return res;
     }

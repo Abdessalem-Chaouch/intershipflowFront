@@ -103,6 +103,18 @@ export class TestService {
         }
     }
 
+    async generateFromOffre(offreId: string): Promise<TechnicalTest> {
+        try {
+            const saved = await firstValueFrom(this.http.post<TestResponseDTO>(`${this.apiUrl}/generate-from-offre/${offreId}`, null));
+            const mapped = this.mapToTechnicalTest(saved);
+            this.tests.update((tests) => [mapped, ...tests]);
+            return mapped;
+        } catch (err) {
+            console.error('Error generating test from offre', err);
+            throw err;
+        }
+    }
+
     async updateTest(updatedTest: TechnicalTest): Promise<TechnicalTest> {
         // Optimistic update
         this.tests.update((tests) => tests.map(t => t.id === updatedTest.id ? { ...updatedTest } : t));

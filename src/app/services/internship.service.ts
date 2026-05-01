@@ -5,6 +5,7 @@ import { firstValueFrom } from 'rxjs';
 export interface InternshipApplication {
     id: string;
     offerTitle: string;
+    offerId: string;
     firstName: string;
     lastName: string;
     cvName: string;
@@ -17,6 +18,7 @@ export interface InternshipApplication {
     iaApproved?: boolean;
     encadrantId?: string;
     utilisateurId?: string;
+    raisonRefus?: string;
 }
 
 export interface InternshipOffer {
@@ -37,6 +39,7 @@ export interface InternshipOffer {
     typeSelection?: string;
     selectedTestId?: string;
     candidateCount?: number;
+    dureeStage?: number;
 }
 
 export interface OffreStageDTO {
@@ -52,6 +55,7 @@ export interface OffreStageDTO {
     typeSelection?: string;
     selectedTestId?: number;
     selectedTestTitre?: string;
+    dureeStage?: number;
 }
 
 @Injectable({
@@ -65,45 +69,6 @@ export class InternshipService {
 
     constructor() {
         this.fetchOffers();
-        // Mock initial applications
-        this.applications.set([
-            {
-                id: '1',
-                offerTitle: 'Développeur Web',
-                firstName: 'Ahmed',
-                lastName: 'Ben Ali',
-                cvName: 'cv_ahmed.pdf',
-                letterName: 'lettre_ahmed.pdf',
-                status: 'EN_ATTENTE',
-                date: new Date(),
-                iaScore: 85,
-                iaApproved: true
-            },
-            {
-                id: '2',
-                offerTitle: 'UI/UX Design',
-                firstName: 'Sarra',
-                lastName: 'Karray',
-                cvName: 'cv_sarra.pdf',
-                letterName: 'lettre_sarra.pdf',
-                status: 'ACCEPTEE',
-                date: new Date(),
-                iaScore: 92,
-                iaApproved: true
-            },
-            {
-                id: '3',
-                offerTitle: 'Data Science',
-                firstName: 'Firas',
-                lastName: 'Ghorbel',
-                cvName: 'cv_firas.pdf',
-                letterName: 'lettre_firas.pdf',
-                status: 'REFUSEE',
-                date: new Date(),
-                iaScore: 45,
-                iaApproved: false
-            }
-        ]);
     }
 
     fetchOffers() {
@@ -114,9 +79,32 @@ export class InternshipService {
             },
             error: (err) => console.error('Error fetching offers', err)
         });
+        this.fetchApplications();
     }
 
-    private mapToInternshipOffer(dto: OffreStageDTO): InternshipOffer {
+    fetchApplications() {
+        this.http.get<any[]>('http://localhost:8081/candidatures/candidaturesPostuler').subscribe({
+            next: (data) => {
+                const mappedApps = data.map(dto => ({
+                    id: dto.id.toString(),
+                    offerTitle: dto.offreTitre || 'Offre',
+                    offerId: dto.offreStageId ? dto.offreStageId.toString() : '',
+                    firstName: dto.prenom,
+                    lastName: dto.nom,
+                    cvName: dto.cvName,
+                    letterName: dto.lettreMotivationName,
+                    status: dto.etat as any,
+                    date: new Date(),
+                    iaScore: dto.scoreAI,
+                    iaApproved: dto.approvedByAI
+                }));
+                this.applications.set(mappedApps);
+            },
+            error: (err) => console.error('Error fetching my applications', err)
+        });
+    }
+
+    public mapToInternshipOffer(dto: OffreStageDTO): InternshipOffer {
         return {
             id: dto.id?.toString() || '',
             title: dto.titre,
@@ -133,7 +121,8 @@ export class InternshipService {
             badge: 'Ouvert',
             techs: (dto.competencesRequises || '').split(',').map(s => s.trim()).filter(s => s),
             highlight: false,
-            cta: 'Postuler'
+            cta: 'Postuler',
+            dureeStage: dto.dureeStage
         };
     }
 
@@ -149,8 +138,23 @@ export class InternshipService {
             nombreCandidatures: offer.candidateCount || 0,
             nombreTests: offer.testCount || 0,
             typeSelection: offer.typeSelection,
-            selectedTestId: offer.selectedTestId ? parseInt(offer.selectedTestId) : undefined
+            selectedTestId: offer.selectedTestId ? parseInt(offer.selectedTestId) : undefined,
+            dureeStage: offer.dureeStage
         };
+    }
+
+    public formatDuration(months: number | undefined): string {
+        if (months === undefined || months === null) return 'N/A';
+        if (months < 12) return `${months} mois`;
+        
+        const years = Math.floor(months / 12);
+        const remainingMonths = months % 12;
+        
+        let result = `${years} ${years > 1 ? 'ans' : 'an'}`;
+        if (remainingMonths > 0) {
+            result += ` et ${remainingMonths} mois`;
+        }
+        return result;
     }
 
     getApplications() {
@@ -239,5 +243,43 @@ export class InternshipService {
             console.error('Error choosing manual test', err);
             throw err;
         }
+    }
+
+    async getRecommendedOffres(): Promise<InternshipOffer[]> {
+        try {
+            const dtos = await firstValueFrom(this.http.get<OffreStageDTO[]>(`${this.apiUrl}/recommendations`));
+            return dtos.map(dto => this.mapToInternshipOffer(dto));
+        } catch (err) {
+            console.error('Error fetching recommended offers', err);
+            throw err;
+        }
+    }
+
+    async getAppliedOffres(): Promise<InternshipOffer[]> {
+        try {
+            const dtos = await firstValueFrom(this.http.get<OffreStageDTO[]>(`${this.apiUrl}/applied`));
+            return dtos.map(dto => this.mapToInternshipOffer(dto));
+        } catch (err) {
+            console.error('Error fetching applied offers', err);
+            throw err;
+        }
+    }
+
+    async getOffersWithRecommendations(): Promise<InternshipOffer[]> {
+        const allDtos = await firstValueFrom(this.http.get<OffreStageDTO[]>(this.apiUrl));
+        const recommended = await this.getRecommendedOffres();
+        
+        let offers = allDtos.map(dto => {
+            const isRec = recommended.some(r => r.id === dto.id?.toString());
+            const mapped = this.mapToInternshipOffer(dto);
+            return {
+                ...mapped,
+                highlight: isRec,
+                badge: isRec ? 'Recommandé' : mapped.badge
+            };
+        });
+
+        // Sort: Recommendations first
+        return offers.sort((a, b) => (b.highlight ? 1 : 0) - (a.highlight ? 1 : 0));
     }
 }

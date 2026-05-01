@@ -366,7 +366,7 @@ import { QuestionService, Question } from '@/app/services/question.service';
                     </div>
                 </div>
                 
-                <div *ngIf="!associatedQuestions?.length" class="text-center p-6 bg-slate-50 rounded-xl border border-dashed border-slate-200 text-slate-400 font-medium italic">
+                <div *ngIf="!associatedQuestions.length" class="text-center p-6 bg-slate-50 rounded-xl border border-dashed border-slate-200 text-slate-400 font-medium italic">
                     Aucune question associée à cet exercice.
                 </div>
             </div>

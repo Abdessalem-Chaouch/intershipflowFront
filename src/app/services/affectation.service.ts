@@ -1,9 +1,10 @@
 import { Injectable, inject } from '@angular/core';
-import { HttpClient, HttpParams } from '@angular/common/http';
+import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 
+/** Matches backend AffectationRequest DTO */
 export interface AffectationRequest {
-    stagiaireId: string;
+    stageId: number;
     encadrantId: string;
 }
 
@@ -24,22 +25,34 @@ export class AffectationService {
     private http = inject(HttpClient);
     private apiUrl = 'http://localhost:8081/affectations';
 
+    /** POST /affectations  — body: { stageId, encadrantId } */
     async affecter(request: AffectationRequest): Promise<string> {
-        return firstValueFrom(this.http.post(`${this.apiUrl}`, request, { responseType: 'text' }));
+        return firstValueFrom(
+            this.http.post(`${this.apiUrl}`, request, { responseType: 'text' })
+        );
     }
 
-    async desaffecter(stagiaireId: string, encadrantId: string): Promise<string> {
-        const params = new HttpParams()
-            .set('stagiaireId', stagiaireId)
-            .set('encadrantId', encadrantId);
-        return firstValueFrom(this.http.delete(`${this.apiUrl}`, { params, responseType: 'text' }));
+    /** DELETE /affectations/{stageId} */
+    async desaffecter(stageId: number): Promise<string> {
+        return firstValueFrom(
+            this.http.delete(`${this.apiUrl}/${stageId}`, { responseType: 'text' })
+        );
     }
 
     async getStagiairesByEncadrant(encadrantId: string): Promise<StagiaireAffecteDTO[]> {
-        return firstValueFrom(this.http.get<StagiaireAffecteDTO[]>(`${this.apiUrl}/encadrant/${encadrantId}/stagiaires`));
+        return firstValueFrom(
+            this.http.get<StagiaireAffecteDTO[]>(`${this.apiUrl}/encadrant/${encadrantId}/stagiaires`)
+        );
     }
 
-    async getEncadrant(stagiaireId: string): Promise<EncadrantDTO> {
-        return firstValueFrom(this.http.get<EncadrantDTO>(`${this.apiUrl}/stagiaire/${stagiaireId}/encadrant`));
+    /** Returns null if the stagiaire has no encadrant (instead of throwing) */
+    async getEncadrant(stagiaireId: string): Promise<EncadrantDTO | null> {
+        try {
+            return await firstValueFrom(
+                this.http.get<EncadrantDTO>(`${this.apiUrl}/stagiaire/${stagiaireId}/encadrant`)
+            );
+        } catch {
+            return null;
+        }
     }
 }

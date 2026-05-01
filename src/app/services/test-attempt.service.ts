@@ -24,6 +24,7 @@ export interface TestReponseResponse {
     bonnesReponses: string[];
     reponsesDonnees: string[];
     correcte: boolean;
+    exerciceTitre?: string;
 }
 
 // Matches TestAttemptResponseDTO

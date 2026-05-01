@@ -1,4 +1,4 @@
-import { Component, EventEmitter, Input, Output, inject, OnChanges, SimpleChanges, LOCALE_ID, effect, computed } from '@angular/core';
+import { Component, EventEmitter, Input, Output, inject, OnChanges, SimpleChanges, LOCALE_ID, effect, computed, OnDestroy, signal } from '@angular/core';
 import { CommonModule, registerLocaleData } from '@angular/common';
 import localeFr from '@angular/common/locales/fr';
 import { DialogModule } from 'primeng/dialog';
@@ -13,6 +13,8 @@ import { TechnicalTest, TestService } from '@/app/services/test.service';
 import { ExerciceService } from '@/app/services/exercice.service';
 import { QuestionService } from '@/app/services/question.service';
 import { TestAttemptService, TestAttemptRequest, TestReponseRequest } from '@/app/services/test-attempt.service';
+import { interval, Subscription } from 'rxjs';
+import { takeWhile } from 'rxjs/operators';
 
 registerLocaleData(localeFr);
 
@@ -50,11 +52,18 @@ registerLocaleData(localeFr);
                     </div>
                     
                     <h2 class="text-4xl md:text-5xl font-bold !text-white mb-4 leading-tight tracking-tight">
-  {{ test.titre }}
-</h2>
+                        {{ test.titre }}
+                    </h2>
                     <p class="text-blue-100/70 text-lg max-w-2xl leading-relaxed mb-8 italic">{{ test.description }}</p>
                     
                     <div class="flex flex-wrap items-center gap-6">
+                        <!-- Compact Countdown Timer Badge -->
+                        <div class="flex items-center gap-3 bg-white/10 backdrop-blur-md px-4 py-2 rounded-xl border border-white/20 shadow-lg animate-pulse" 
+                             [ngClass]="{'ring-2 ring-red-500 bg-red-500/30': isTimeLow()}">
+                            <i class="pi pi-stopwatch text-blue-200" [ngClass]="{'text-white': isTimeLow()}"></i>
+                            <span class="text-sm font-black font-mono tracking-wider tabular-nums">{{ formatRemainingTime() }}</span>
+                        </div>
+
                         <div class="flex items-center gap-3 bg-white/5 px-4 py-2 rounded-xl border border-white/10">
                             <i class="pi pi-clock text-blue-200"></i>
                             <span class="text-sm font-bold">{{ test.dureeMinutes }} minutes</span>
@@ -110,15 +119,15 @@ registerLocaleData(localeFr);
                                     <div *ngIf="q.typeQuestion === 'QCU' || q.typeQuestion === 'TRUE_FALSE'" class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         <div *ngFor="let option of (q.typeQuestion === 'TRUE_FALSE' ? ['Vrai', 'Faux'] : q.propositions || [])" 
                                              class="option-item flex items-center gap-4 p-5 rounded-2xl border-2 cursor-pointer transition-all duration-300"
-                                             [ngClass]="answers[q.id] === option 
+                                             [ngClass]="answers[ex.id + '_' + q.id] === option 
                                                 ? 'bg-blue-50/50 border-[#063970] ring-4 ring-blue-500/5' 
                                                 : 'bg-white border-slate-50 hover:border-slate-200 hover:bg-slate-50/30'"
-                                             (click)="answers[q.id] = option">
+                                             (click)="answers[ex.id + '_' + q.id] = option">
                                             <div class="w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all"
-                                                 [ngClass]="answers[q.id] === option ? 'border-[#063970] bg-[#063970]' : 'border-slate-200 bg-white'">
-                                                <div *ngIf="answers[q.id] === option" class="w-1.5 h-1.5 rounded-full bg-white animate-pulse"></div>
+                                                 [ngClass]="answers[ex.id + '_' + q.id] === option ? 'border-[#063970] bg-[#063970]' : 'border-slate-200 bg-white'">
+                                                <div *ngIf="answers[ex.id + '_' + q.id] === option" class="w-1.5 h-1.5 rounded-full bg-white animate-pulse"></div>
                                             </div>
-                                            <span class="text-base font-bold transition-colors" [ngClass]="answers[q.id] === option ? 'text-[#063970]' : 'text-slate-600'">
+                                            <span class="text-base font-bold transition-colors" [ngClass]="answers[ex.id + '_' + q.id] === option ? 'text-[#063970]' : 'text-slate-600'">
                                                 {{ option }}
                                             </span>
                                         </div>
@@ -128,15 +137,15 @@ registerLocaleData(localeFr);
                                     <div *ngIf="q.typeQuestion === 'QCM'" class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         <div *ngFor="let option of q.propositions" 
                                              class="option-item flex items-center gap-4 p-5 rounded-2xl border-2 cursor-pointer transition-all duration-300"
-                                             [ngClass]="isChecked(q.id, option) 
+                                             [ngClass]="isChecked(ex.id + '_' + q.id, option) 
                                                 ? 'bg-blue-50/50 border-[#063970] ring-4 ring-blue-500/5' 
                                                 : 'bg-white border-slate-50 hover:border-slate-200 hover:bg-slate-50/30'"
-                                             (click)="toggleQcm(q.id, option)">
+                                             (click)="toggleQcm(ex.id + '_' + q.id, option)">
                                             <div class="w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all"
-                                                 [ngClass]="isChecked(q.id, option) ? 'border-[#063970] bg-[#063970] text-white' : 'border-slate-200 bg-white text-transparent'">
+                                                 [ngClass]="isChecked(ex.id + '_' + q.id, option) ? 'border-[#063970] bg-[#063970] text-white' : 'border-slate-200 bg-white text-transparent'">
                                                 <i class="pi pi-check text-[10px] font-black"></i>
                                             </div>
-                                            <span class="text-base font-bold transition-colors" [ngClass]="isChecked(q.id, option) ? 'text-[#063970]' : 'text-slate-600'">
+                                            <span class="text-base font-bold transition-colors" [ngClass]="isChecked(ex.id + '_' + q.id, option) ? 'text-[#063970]' : 'text-slate-600'">
                                                 {{ option }}
                                             </span>
                                         </div>
@@ -145,7 +154,7 @@ registerLocaleData(localeFr);
                                     <!-- QUESTION_REPONSE (Saisie Libre) -->
                                     <div *ngIf="q.typeQuestion === 'QUESTION_REPONSE'" class="free-text-area">
                                         <div class="relative group">
-                                            <textarea pInputTextarea [(ngModel)]="answers[q.id]" placeholder="Saisissez votre réponse argumentée ici..." 
+                                            <textarea pInputTextarea [(ngModel)]="answers[ex.id + '_' + q.id]" placeholder="Saisissez votre réponse argumentée ici..." 
                                                       class="w-full p-6 text-lg rounded-2xl border-2 border-slate-100 bg-slate-50/30 focus:bg-white transition-all min-h-[150px] outline-none focus:border-[#063970] focus:ring-4 focus:ring-blue-500/5"
                                                       [autoResize]="true"></textarea>
                                             <div class="absolute bottom-4 right-4 text-[10px] font-bold text-slate-300 uppercase tracking-tighter opacity-0 group-focus-within:opacity-100 transition-opacity">
@@ -170,7 +179,7 @@ registerLocaleData(localeFr);
                              (onClick)="submitTest()"
                              styleClass="submit-btn !bg-[#063970] !border-none !rounded-[2rem] !px-16 !py-5 !font-black !text-xl !shadow-2xl shadow-blue-900/20 hover:!scale-105 transition-all active:!scale-95" />
                     <p class="text-slate-400 text-[10px] font-medium max-w-xs text-center leading-relaxed">
-                        En soumettant ce test, vos réponses seront enregistrées et votre score sera instantanément rattaché à votre dossier.
+                        En soumettant ce test, vos réponses seront enregistrées et votre candidature sera finalisée.
                     </p>
                 </div>
             </div>
@@ -193,7 +202,7 @@ registerLocaleData(localeFr);
         </style>
     `
 })
-export class TestTakeComponent implements OnChanges {
+export class TestTakeComponent implements OnChanges, OnDestroy {
     private testService = inject(TestService);
     private exerciceService = inject(ExerciceService);
     private questionService = inject(QuestionService);
@@ -201,6 +210,7 @@ export class TestTakeComponent implements OnChanges {
 
     @Input() test: TechnicalTest | null = null;
     @Input() candidateInfo: { firstName: string, lastName: string, candidatureId: number } | null = null;
+    @Input() timeLimit: number | null = null; // Optional override for test duration in minutes
     @Output() onTestCompleted = new EventEmitter<{ score: number, passed: boolean }>();
 
     exercicesPrep = computed(() => {
@@ -216,6 +226,17 @@ export class TestTakeComponent implements OnChanges {
         this.exercicesPrep().reduce((acc, ex) => acc + (ex.questions?.length || 0), 0)
     );
 
+    remainingTime = signal<number>(0);
+    private timerSubscription?: Subscription;
+    isTimeLow = computed(() => this.remainingTime() < 60); // Low time if less than 1 minute
+
+    formatRemainingTime = computed(() => {
+        const time = this.remainingTime();
+        const minutes = Math.floor(time / 60);
+        const seconds = time % 60;
+        return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    });
+
     answers: { [key: string]: any } = {};
     isSubmitting = false;
 
@@ -226,9 +247,10 @@ export class TestTakeComponent implements OnChanges {
             if (exs.length > 0) {
                 exs.forEach(ex => {
                     ex.questions?.forEach((q: any) => {
-                        if (!(q.id in this.answers)) {
-                            if (q.typeQuestion === 'QCM') this.answers[q.id] = [];
-                            else this.answers[q.id] = '';
+                        const answerKey = `${ex.id}_${q.id}`;
+                        if (!(answerKey in this.answers)) {
+                            if (q.typeQuestion === 'QCM') this.answers[answerKey] = [];
+                            else this.answers[answerKey] = '';
                         }
                     });
                 });
@@ -237,7 +259,43 @@ export class TestTakeComponent implements OnChanges {
     }
 
     ngOnChanges(changes: SimpleChanges) {
-        // SimpleChanges handles input changes, computed handles reactivity
+        if (changes['test'] && this.test) {
+            this.startTimer();
+        }
+    }
+
+    ngOnDestroy() {
+        this.stopTimer();
+    }
+
+    private startTimer() {
+        this.stopTimer();
+        const duration = this.timeLimit || this.test?.dureeMinutes;
+        if (!duration) return;
+
+        this.remainingTime.set(duration * 60);
+        
+        this.timerSubscription = interval(1000)
+            .pipe(takeWhile(() => this.remainingTime() > 0 && !this.isSubmitting))
+            .subscribe({
+                next: () => {
+                    this.remainingTime.update(t => t - 1);
+                    if (this.remainingTime() <= 0) {
+                        this.handleTimeUp();
+                    }
+                }
+            });
+    }
+
+    private stopTimer() {
+        if (this.timerSubscription) {
+            this.timerSubscription.unsubscribe();
+        }
+    }
+
+    private handleTimeUp() {
+        if (this.isSubmitting) return;
+        this.submitTest();
     }
 
     isChecked(qId: string, option: string): boolean {
@@ -259,7 +317,8 @@ export class TestTakeComponent implements OnChanges {
         const reponses: TestReponseRequest[] = [];
         this.exercicesPrep().forEach(ex => {
             ex.questions.forEach((q: any) => {
-                const userAnswer = this.answers[q.id];
+                const answerKey = `${ex.id}_${q.id}`;
+                const userAnswer = this.answers[answerKey];
                 let reponsesDonnees: string[];
 
                 if (q.typeQuestion === 'QCM') {

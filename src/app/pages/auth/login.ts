@@ -91,7 +91,7 @@ export class Login {
             this.messageService.add({ severity: 'success', summary: 'Succès', detail: 'Connexion réussie', life: 1500 });
             
             setTimeout(() => {
-                this.router.navigate(['/']);
+                this.router.navigate(['/landing']);
             }, 1000);
             
         } catch (err: any) {

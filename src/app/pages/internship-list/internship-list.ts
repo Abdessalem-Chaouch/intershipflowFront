@@ -1,4 +1,4 @@
-import { Component, OnInit, Signal, inject, ChangeDetectorRef } from '@angular/core';
+import { Component, OnInit, Signal, signal, inject, ChangeDetectorRef, OnDestroy, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TableModule } from 'primeng/table';
 import { ButtonModule } from 'primeng/button';
@@ -12,8 +12,14 @@ import { MessageService } from 'primeng/api';
 import { ToastModule } from 'primeng/toast';
 import { FormsModule } from '@angular/forms';
 import { RippleModule } from 'primeng/ripple';
-import { InternshipService, InternshipOffer, InternshipApplication } from '@/app/services/internship.service';
+import { TooltipModule } from 'primeng/tooltip';
+import { InternshipService, InternshipOffer, InternshipApplication, OffreStageDTO } from '@/app/services/internship.service';
 import { CandidatureService } from '@/app/services/candidature.service';
+import { StageService, Stage, EtatStage } from '@/app/services/stage.service';
+import { UserService } from '@/app/services/user.service';
+import { firstValueFrom } from 'rxjs';
+import { HttpClient } from '@angular/common/http';
+import { Router } from '@angular/router';
 import { TestService, TechnicalTest } from '@/app/services/test.service';
 import { TestTakeComponent } from '../test-take.component';
 
@@ -23,415 +29,447 @@ import { FooterWidget } from '../landing/components/footerwidget';
 @Component({
     selector: 'app-internship-list',
     standalone: true,
-    imports: [CommonModule, TableModule, ButtonModule, TagModule, InputTextModule, IconFieldModule, InputIconModule, DialogModule, FileUploadModule, ToastModule, FormsModule, RippleModule, TopbarWidget, FooterWidget, TestTakeComponent],
+    imports: [CommonModule, TableModule, ButtonModule, TagModule, InputTextModule, IconFieldModule, InputIconModule, DialogModule, FileUploadModule, ToastModule, FormsModule, RippleModule, TooltipModule, TopbarWidget, FooterWidget, TestTakeComponent],
     providers: [MessageService, CandidatureService],
-    styles: [`
-        .stage-card {
-            transition: transform 0.4s cubic-bezier(0.165, 0.84, 0.44, 1), box-shadow 0.3s ease;
-            height: 100%;
-            display: flex;
-            flex-direction: column;
-        }
-        .stage-card:hover {
-            transform: translateY(-8px) scale(1.01);
-            box-shadow: 0 30px 40px -15px rgba(6, 57, 112, 0.15);
-        }
-
-        .offer-title {
-            display: -webkit-box;
-            -webkit-line-clamp: 2;
-            -webkit-box-orient: vertical;
-            overflow: hidden;
-            height: 4rem;
-            line-height: 2rem;
-        }
-
-        .offer-description {
-            display: -webkit-box;
-            -webkit-line-clamp: 3;
-            -webkit-box-orient: vertical;
-            overflow: hidden;
-            height: 5.25rem;
-            line-height: 1.75rem;
-            overflow-wrap: break-word;
-            word-wrap: break-word;
-            word-break: break-word;
-            hyphens: auto;
-        }
-
-        .tech-list {
-            height: 12rem;
-            overflow-y: auto;
-            scrollbar-width: none;
-        }
-
-        .tech-list::-webkit-scrollbar {
-            display: none;
-        }
-        
-        @keyframes pulse-badge {
-            0%, 100% { transform: scale(1); filter: brightness(1); }
-            50% { transform: scale(1.06); filter: brightness(1.3); box-shadow: 0 0 15px rgba(255,255,255,0.4); }
-        }
-        @keyframes shimmer-badge {
-            0% { transform: translateX(-150%) rotate(45deg); }
-            100% { transform: translateX(200%) rotate(45deg); }
-        }
-        .badge-pulse {
-            position: relative;
-            overflow: hidden;
-            animation: pulse-badge 3s ease-in-out infinite;
-            display: inline-block;
-        }
-        .badge-pulse::after {
-            content: "";
-            position: absolute;
-            top: -50%;
-            left: -100%;
-            width: 50%;
-            height: 200%;
-            background: linear-gradient(to right, transparent, rgba(255,255,255,0.3), transparent);
-            transform: rotate(45deg);
-            animation: shimmer-badge 4s infinite 1s;
-        }
-        ::ng-deep .modern-dialog {
-            border-radius: 2rem !important;
-            overflow: hidden;
-            border: none !important;
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25) !important;
-        }
-        ::ng-deep .modern-dialog .p-dialog-header {
-            padding: 2rem 2rem 1rem 2rem !important;
-            background: white !important;
-        }
-        ::ng-deep .modern-dialog .p-dialog-content {
-            padding: 0 2rem 2rem 2rem !important;
-            background: white !important;
-        }
-        ::ng-deep .modern-dialog .p-inputtext {
-            transition: all 0.2s ease;
-        }
-        ::ng-deep .modern-dialog .p-inputtext:focus {
-            transform: translateY(-1px);
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1) !important;
-        }
-    `],
     template: `
-        <div class="bg-surface-0 dark:bg-surface-900">
-            <div class="landing-wrapper overflow-hidden">
-                <topbar-widget />
+        <div class="bg-slate-50 dark:bg-[#010b14] min-h-screen transition-colors relative overflow-hidden">
+            <!-- Professional Background Accents -->
+            <div class="absolute top-0 left-0 w-full h-full pointer-events-none overflow-hidden">
+                <div class="absolute -top-[10%] -left-[5%] w-[30%] h-[30%] bg-[#063970]/5 rounded-full blur-[100px]"></div>
+                <div class="absolute top-[20%] -right-[5%] w-[25%] h-[25%] bg-[#063970]/5 rounded-full blur-[100px]"></div>
+                <div class="absolute bottom-0 left-[20%] w-[40%] h-[20%] bg-[#063970]/5 rounded-full blur-[120px]"></div>
+            </div>
 
-                <div class="px-6 lg:px-20 py-24 bg-slate-50 dark:bg-[#021427] min-h-screen">
-                    <div class="text-center mb-16">
-                        <h1 class="text-[#063970] dark:text-blue-300 font-bold mb-4 text-5xl">Gérer vos opportunités</h1>
-                        <p class="text-gray-500 dark:text-blue-100/70 text-xl block max-w-2xl mx-auto">Explorez nos offres de stages détaillées et postulez en quelques clics.</p>
+            <topbar-widget />
+
+            <div class="max-w-7xl mx-auto px-6 lg:px-20 py-32 relative z-10">
+                <!-- Section Header -->
+                <div class="text-center mb-16">
+                    <div class="inline-flex items-center gap-2 px-3 py-1 mb-8 bg-[#063970]/5 dark:bg-[#063970]/20 border border-[#063970]/10 dark:border-[#063970]/40 rounded-full">
+                        <span class="relative flex h-2 w-2">
+                            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#063970] opacity-75"></span>
+                            <span class="relative inline-flex rounded-full h-2 w-2 bg-[#063970]"></span>
+                        </span>
+                        <span class="text-[10px] font-black uppercase tracking-widest text-[#063970] dark:text-blue-300">Catalogue des Stages</span>
                     </div>
+                    <h1 class="text-slate-900 dark:text-white text-5xl md:text-6xl font-black mb-8 tracking-tight">
+                        Explorez nos <span class="text-transparent bg-clip-text bg-gradient-to-r from-[#063970] via-blue-800 to-blue-500">Opportunités</span>
+                    </h1>
+                    <p class="text-slate-500 dark:text-slate-400 text-xl max-w-2xl mx-auto leading-relaxed mb-12">
+                        Trouvez le stage qui propulsera votre carrière. Postulez en quelques clics et passez vos tests en ligne.
+                    </p>
+                    
+                    <!-- Search Field -->
+                    <div class="max-w-xl mx-auto">
+                        <p-iconField iconPosition="left">
+                            <p-inputIcon styleClass="pi pi-search text-[#063970]" />
+                            <input type="text" pInputText placeholder="Rechercher un stage ou une technologie..." 
+                                   (input)="onSearch($event)"
+                                   class="w-full !rounded-2xl !py-4 !px-12 !border-none !shadow-lg !bg-white dark:!bg-slate-800 !text-slate-700 dark:!text-white focus:!ring-2 focus:!ring-[#063970]" />
+                        </p-iconField>
+                    </div>
+                </div>
 
-                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                        <div *ngFor="let offer of offers()" 
-                             [ngClass]="offer.highlight ? 'bg-[#063970] dark:bg-blue-600 border-2 border-white/20 shadow-xl' : 'bg-white dark:bg-[#063970] border border-gray-100 dark:border-blue-800/40 shadow-md'"
-                             class="stage-card p-10 rounded-3xl cursor-pointer transition-all">
-                            
-                            <div class="flex items-start justify-between mb-8">
-                                <div [ngClass]="offer.highlight ? 'text-white' : 'text-[#063970] dark:text-blue-50'" class="text-2xl font-bold offer-title">{{offer.title}}</div>
-                                <span 
-                                    class="text-xs font-semibold py-1 px-3 rounded-full mt-2"
-                                    [ngClass]="[
-                                        isExpired(offer.dateFin) ? 'bg-red-100 dark:bg-red-400/20 text-red-700 dark:text-red-300' : (offer.highlight ? 'badge-pulse bg-white/20 text-white' : 'bg-green-100 dark:bg-green-400/20 text-green-700 dark:text-green-300')
-                                    ]">
-                                    {{ isExpired(offer.dateFin) ? 'Fermé' : offer.badge }}
+                <!-- Offers Grid -->
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                    <div *ngFor="let offer of filteredOffers()" 
+                         class="pricing-card group"
+                         [class.featured]="offer.highlight">
+                        
+                        <!-- Premium Badge for Featured -->
+                        <div *ngIf="offer.highlight" class="featured-badge">
+                            <i class="pi pi-sparkles"></i>
+                            <span>RECOMMANDÉ</span>
+                        </div>
+
+                        <!-- Card Header -->
+                        <div class="p-8 pb-0">
+                            <div class="flex justify-between items-start mb-6">
+                                <div class="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-700/50 group-hover:bg-[#063970] group-hover:text-white transition-colors duration-500 shadow-sm">
+                                    <i class="pi pi-briefcase text-xl"></i>
+                                </div>
+                                <span class="px-3 py-1 bg-[#063970]/5 dark:bg-[#063970]/20 text-[#063970] dark:text-blue-300 text-[10px] font-black uppercase tracking-wider rounded-lg border border-[#063970]/10 dark:border-[#063970]/30">
+                                    {{offer.badge}}
                                 </span>
                             </div>
 
-                            <div class="flex items-center gap-4 mb-6">
-                                <div class="flex items-center gap-2 text-sm" [ngClass]="offer.highlight ? 'text-blue-200' : 'text-gray-500'">
-                                    <i class="pi pi-map-marker"></i>
+                            <!-- Information Row -->
+                            <div class="flex flex-col gap-1 mb-4">
+                                <div class="flex items-center gap-2">
+                                    <span class="text-[10px] font-black text-[#063970] dark:text-blue-300/60 uppercase tracking-[0.2em]">Offre de stage</span>
+                                    <div class="h-px flex-1 bg-slate-100 dark:bg-slate-800"></div>
+                                </div>
+                                <h3 class="text-2xl font-black text-slate-900 dark:text-white line-clamp-2 leading-tight group-hover:text-[#063970] dark:group-hover:text-blue-400 transition-colors">
+                                    {{offer.title}}
+                                </h3>
+                            </div>
+
+                            <!-- Metadata Grid -->
+                            <div class="grid grid-cols-2 gap-4 mb-6">
+                                <div class="flex items-center gap-2 text-slate-500 dark:text-slate-400 text-[11px] font-bold bg-slate-50 dark:bg-slate-800/50 p-2 rounded-xl border border-slate-100 dark:border-slate-700/50">
+                                    <i class="pi pi-map-marker text-[#063970] dark:text-blue-400"></i>
                                     {{offer.location}}
                                 </div>
-                                <div class="flex items-center gap-2 text-sm" [ngClass]="offer.highlight ? 'text-blue-200' : 'text-gray-500'">
-                                    <i class="pi pi-calendar"></i>
-                                    {{offer.duration}}
+                                <div *ngIf="offer.dateFin" class="flex items-center gap-2 text-red-500 dark:text-red-400 text-[11px] font-bold bg-red-50/50 dark:bg-red-900/10 p-2 rounded-xl border border-red-100/50 dark:border-red-900/30">
+                                    <i class="pi pi-calendar-times"></i>
+                                    Fin: {{offer.dateFin | date:'dd MMM'}}
+                                </div>
+                                <div class="flex items-center gap-2 text-slate-500 dark:text-slate-400 text-[11px] font-bold bg-slate-50 dark:bg-slate-800/50 p-2 rounded-xl border border-slate-100 dark:border-slate-700/50 col-span-2">
+                                    <i class="pi pi-clock text-[#063970] dark:text-blue-400"></i>
+                                    Durée: {{internshipService.formatDuration(offer.dureeStage)}}
                                 </div>
                             </div>
+                        </div>
 
-                            <p [ngClass]="offer.highlight ? 'text-blue-100' : 'text-gray-600 dark:text-blue-100/70'" class="leading-relaxed mb-8 text-lg offer-description">
-                                {{offer.details || offer.desc}}
+                        <!-- Card Content -->
+                        <div class="px-8 flex-1">
+                            <p class="text-slate-500 dark:text-slate-400 text-sm leading-relaxed mb-6 line-clamp-2 font-medium italic">
+                                "{{offer.desc}}"
                             </p>
 
-                            <ul class="list-none p-0 flex flex-col gap-4 mb-10 tech-list">
-                                <li *ngFor="let tech of offer.techs" 
-                                    [ngClass]="offer.highlight ? 'text-white' : 'text-gray-700 dark:text-blue-100/80'"
-                                    class="flex items-center gap-3">
-                                    <i class="pi pi-check-circle text-xl" [ngClass]="offer.highlight ? 'text-white' : 'text-[#063970] dark:text-blue-400'"></i>
-                                    <span>{{tech}}</span>
-                                </li>
-                            </ul>
-
-                            <div *ngIf="getApplicationStatus(offer.title) as status" class="mt-auto">
-                                <div class="flex flex-col gap-2">
-                                    <span class="text-xs font-semibold" [ngClass]="offer.highlight ? 'text-blue-200/60' : 'text-gray-500 dark:text-blue-200/60'" class="uppercase tracking-wider">État de votre candidature</span>
-                                    <p-tag [value]="status" [severity]="getStatusSeverity(status)" styleClass="w-full text-lg py-4 rounded-2xl shadow-sm" />
+                            <div class="space-y-3 mb-8">
+                                <div class="flex flex-wrap gap-2">
+                                    <span *ngFor="let tech of offer.techs | slice:0:4" 
+                                          class="px-2.5 py-1 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-[10px] font-bold rounded-lg border border-slate-200 dark:border-slate-700 group-hover:border-[#063970]/30 transition-colors">
+                                        {{tech}}
+                                    </span>
+                                    <span *ngIf="offer.techs.length > 4" class="text-[10px] font-bold text-slate-400 dark:text-slate-500 self-center">+{{offer.techs.length - 4}}</span>
                                 </div>
                             </div>
+                        </div>
 
-                            <div *ngIf="!getApplicationStatus(offer.title)" class="mt-auto flex gap-3">
-                                <button pButton pRipple icon="pi pi-info-circle"
-                                        [class]="offer.highlight ? '!bg-white/10 !text-white !border-white/30' : '!bg-slate-100 !text-slate-600 dark:!bg-slate-800' "
-                                        class="p-4 rounded-2xl border-none font-bold transition-all"
-                                        pTooltip="Plus d'infos"
-                                        (click)="openDetailsDialog(offer)"></button>
+                        <!-- Card Footer / Actions -->
+                        <div class="p-8 pt-0 mt-auto">
+                            <div class="flex gap-3 h-[52px]">
+                                <button pButton pRipple icon="pi pi-info-circle" 
+                                        class="p-button-outlined !rounded-xl !w-[52px] !h-[52px] !border-slate-200 dark:!border-slate-700 !text-slate-500 dark:!text-slate-400 hover:!bg-slate-50 dark:hover:!bg-slate-800 transition-all"
+                                        (click)="openDetailsDialog(offer)"
+                                        pTooltip="Détails"></button>
+                                
+                                <div *ngIf="!getApplicationStatus(offer.id) && hasActiveInternship()"
+                                     class="flex-1 flex items-center justify-center gap-2 bg-slate-100 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 !rounded-xl text-[10px] font-black border border-slate-200 dark:border-slate-700"
+                                     [pTooltip]="'Tu as déjà un stage en état : ' + (stageActif()?.etat || '')">
+                                    <i class="pi pi-lock"></i>
+                                    <span>STAGE EN COURS</span>
+                                </div>
 
-                                <button *ngIf="!isExpired(offer.dateFin)"
-                                        pButton pRipple [label]="offer.highlight ? 'Postuler maintenant' : 'Postuler'" 
-                                        [class]="offer.highlight ? '!bg-transparent !text-white !border-2 !border-white hover:!bg-white/10' : 'bg-[#063970] dark:bg-blue-400 text-white dark:text-surface-900 border-none hover:bg-blue-900 dark:hover:bg-blue-300'"
-                                        class="flex-1 font-bold rounded-2xl py-4 transition-all text-lg"
+                                <div *ngIf="!getApplicationStatus(offer.id) && !hasActiveInternship() && !hasCompletedInternshipFor(offer.id) && !canUserApply()"
+                                     class="flex-1 flex items-center justify-center gap-2 bg-slate-50 dark:bg-slate-800/30 text-slate-400 dark:text-slate-500 !rounded-xl text-[10px] font-black border border-slate-200 dark:border-slate-700/50"
+                                     pTooltip="L'application est réservée aux profils stagiaires.">
+                                    <i class="pi pi-lock"></i>
+                                    <span>ACTION BLOQUÉE</span>
+                                </div>
+
+                                <div *ngIf="!getApplicationStatus(offer.id) && !hasActiveInternship() && hasCompletedInternshipFor(offer.id)"
+                                     class="flex-1 flex items-center justify-center gap-2 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 !rounded-xl text-[10px] font-black border border-emerald-100 dark:border-emerald-800/30"
+                                     pTooltip="Félicitations ! Tu as déjà validé ce stage.">
+                                    <i class="pi pi-verified"></i>
+                                    <span>STAGE EFFECTUÉ</span>
+                                </div>
+                                
+                                <button *ngIf="!getApplicationStatus(offer.id) && !hasActiveInternship() && !hasCompletedInternshipFor(offer.id) && canUserApply()"
+                                        pButton pRipple [label]="offer.cta" 
+                                        class="pricing-action-btn flex-1 !rounded-xl !font-black !text-sm !shadow-lg transition-all"
                                         (click)="openApplyDialog(offer)"></button>
                                 
-                                <button *ngIf="isExpired(offer.dateFin)"
-                                        pButton pRipple label="Fermé" [disabled]="true"
-                                        class="flex-1 font-bold rounded-2xl py-4 transition-all text-lg bg-slate-200 dark:bg-slate-800 text-slate-400 border-none"></button>
+                                <div *ngIf="getApplicationStatus(offer.id) as status" 
+                                     class="flex-1 flex items-center justify-center gap-2 status-indicator !rounded-xl text-[10px] font-black border border-current transition-all"
+                                     [ngClass]="hasCompletedInternshipFor(offer.id) ? 'bg-slate-100 text-slate-500 border-slate-200' : getStatusSeverity(status)">
+                                     <i class="pi" [ngClass]="hasCompletedInternshipFor(offer.id) ? 'pi-history' : 'pi-check-circle'"></i>
+                                     <span>{{ hasCompletedInternshipFor(offer.id) ? 'DÉJÀ FAIT CE STAGE' : 'POSTULÉ (' + status + ')' }}</span>
+                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <footer-widget />
+                <!-- Empty State -->
+                <div *ngIf="filteredOffers().length === 0" class="text-center py-20">
+                    <i class="pi pi-search text-6xl text-slate-200 dark:text-slate-800 mb-6 block"></i>
+                    <h3 class="text-2xl font-bold text-slate-400 dark:text-slate-600">Aucune offre ne correspond à votre recherche.</h3>
+                </div>
             </div>
+
+            <footer-widget />
         </div>
 
-        <!-- Application Dialog Modernisé -->
-        <p-dialog [(visible)]="applyDialog" 
-                  [modal]="true" 
-                  [draggable]="false"
-                  [resizable]="false"
-                  [dismissableMask]="false"
-                  styleClass="modern-dialog"
-                  [style]="{ width: applyStep === 2 ? 'min(900px, 98vw)' : 'min(550px, 95vw)' }">
-            
-            <ng-template pTemplate="header">
-                <div class="flex items-center justify-between w-full">
-                    <div class="flex flex-col gap-1">
-                        <h5 class="m-0 text-2xl font-black text-slate-800 tracking-tight">
-                            Dossier de candidature
-                        </h5>
-                        <p class="text-xs text-slate-400 font-medium uppercase tracking-widest">{{ selectedOffer?.title }}</p>
-                    </div>
-                    <div class="flex items-center gap-2 mr-6">
-                        <div [class]="applyStep >= 1 ? 'bg-[#063970] text-white' : 'bg-slate-100'" class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold">1</div>
-                        <div [class]="applyStep >= 2 ? 'bg-[#063970]' : 'bg-slate-100'" class="w-6 h-[2px]"></div>
-                        <div [class]="applyStep >= 2 ? 'bg-[#063970] text-white' : 'bg-slate-100'" class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold">2</div>
-                    </div>
-                </div>
-            </ng-template>
-
-            <ng-template pTemplate="content">
-                <!-- STEP 1: INFORMATIONS -->
-                <div *ngIf="applyStep === 1" class="flex flex-col gap-6 py-6 px-2">
-                    <!-- Section Infos Perso -->
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div class="flex flex-col gap-2">
-                            <label for="firstName" class="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Prénom</label>
-                            <input id="firstName" type="text" pInputText [(ngModel)]="applicationForm.firstName" 
-                                   placeholder="Votre prénom" class="w-full h-12 border-slate-200 rounded-xl focus:ring-slate-800" />
-                        </div>
-                        <div class="flex flex-col gap-2">
-                            <label for="lastName" class="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Nom</label>
-                            <input id="lastName" type="text" pInputText [(ngModel)]="applicationForm.lastName" 
-                                   placeholder="Votre nom" class="w-full h-12 border-slate-200 rounded-xl focus:ring-slate-800" />
-                        </div>
-                    </div>
-                    
-                    <!-- Section Documents -->
-                    <div class="flex flex-col gap-5">
-                        <div class="flex flex-col gap-2">
-                            <label class="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Curriculum Vitae (PDF)</label>
-                            <div class="flex items-center gap-3 p-3 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200 hover:border-[#063970] transition-colors group">
-                                <div class="w-12 h-12 rounded-xl bg-blue-100 text-[#063970] flex items-center justify-center text-xl shadow-sm">
-                                    <i class="pi pi-file-pdf"></i>
-                                </div>
-                                <div class="flex-1 overflow-hidden">
-                                    <p class="text-sm font-bold text-slate-800 truncate mb-0">{{ applicationForm.cvFile ? applicationForm.cvFile.name : 'Aucun fichier sélectionné' }}</p>
-                                    <p class="text-[10px] text-slate-400 font-medium">Format PDF max. 5Mo</p>
-                                </div>
-                                <p-fileUpload mode="basic" [name]="'cv'" chooseLabel="Choisir" 
-                                              (onSelect)="onFileSelect($event, 'cv')" accept=".pdf" [maxFileSize]="5000000"
-                                              styleClass="p-button-sm p-button-outlined shadow-none" />
-                            </div>
-                        </div>
-
-                        <div class="flex flex-col gap-2">
-                            <label class="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Lettre de Motivation</label>
-                            <div class="flex items-center gap-3 p-3 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200 hover:border-[#063970] transition-colors group">
-                                <div class="w-12 h-12 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center text-xl shadow-sm">
-                                    <i class="pi pi-file"></i>
-                                </div>
-                                <div class="flex-1 overflow-hidden">
-                                    <p class="text-sm font-bold text-slate-800 truncate mb-0">{{ applicationForm.letterFile ? applicationForm.letterFile.name : 'Aucun fichier sélectionné' }}</p>
-                                    <p class="text-[10px] text-slate-400 font-medium">Format PDF/Word max. 5Mo</p>
-                                </div>
-                                <p-fileUpload mode="basic" [name]="'letter'" chooseLabel="Choisir" 
-                                              (onSelect)="onFileSelect($event, 'letter')" accept=".pdf,.doc,.docx" [maxFileSize]="5000000"
-                                              styleClass="p-button-sm p-button-outlined shadow-none" />
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- STEP 2: TEST TECHNIQUE -->
-                <div *ngIf="applyStep === 2" class="py-4">
-                    <app-test-take [test]="assignedTest" 
-                                 [candidateInfo]="{firstName: applicationForm.firstName, lastName: applicationForm.lastName, candidatureId: createdCandidatureId!}"
-                                 (onTestCompleted)="onTestCompleted($event)" />
-                </div>
-
-                <!-- STEP 3: CONFIRMATION -->
-                <div *ngIf="applyStep === 3" class="flex flex-col items-center justify-center py-16 gap-6">
-                    <div class="w-24 h-24 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center text-5xl shadow-inner animate-bounce">
-                        <i class="pi pi-check-circle"></i>
-                    </div>
-                    <div class="text-center">
-                        <h4 class="text-2xl font-black text-slate-800 m-0">Test Formaté avec Succès !</h4>
-                        <p class="text-slate-500 font-medium mt-2">Score obtenu : <span class="text-[#063970] font-black text-xl">{{ testResult?.score }}%</span></p>
-                        <p-tag [value]="testResult?.passed ? 'Admis à l étape suivante' : 'Score insuffisant'" 
-                               [severity]="testResult?.passed ? 'success' : 'danger'" styleClass="px-4 py-2 mt-2" />
-                    </div>
-                </div>
-            </ng-template>
-
-            <ng-template pTemplate="footer">
-                <div class="flex items-center justify-between w-full p-4 border-t border-slate-50 bg-slate-50/50 rounded-b-3xl">
-                    <div class="flex gap-2">
-                        <p-button label="Annuler" icon="pi pi-times" [text]="true" severity="secondary" (onClick)="applyDialog = false" />
-                        <p-button *ngIf="applyStep === 2" 
-                                 label="Retour aux documents" 
-                                 icon="pi pi-arrow-left" 
-                                 [text]="true" 
-                                 severity="secondary" 
-                                 (onClick)="applyStep = 1" />
-                    </div>
-                    
-                    <p-button *ngIf="applyStep === 1" 
-                             label="Continuer vers le test" 
-                             icon="pi pi-arrow-right" iconPos="right"
-                             [disabled]="!isFormValid()" 
-                             (onClick)="goToTestStep()" 
-                             styleClass="!bg-slate-800 !border-none !rounded-xl !px-6 !py-3 !font-bold" />
-
-                    <p-button *ngIf="applyStep === 3" 
-                             label="Envoyer ma candidature" 
-                             icon="pi pi-send"
-                             [loading]="isSubmitting" 
-                             (onClick)="submitApplication()" 
-                             styleClass="!bg-[#063970] !border-none !rounded-xl !px-8 !py-4 !font-black !text-lg shadow-lg" />
-                </div>
-            </ng-template>
-        </p-dialog>
-
-        <!-- Details Dialog Moderne -->
+        <!-- Details Dialog -->
         <p-dialog [(visible)]="detailsDialog" 
                   [modal]="true" 
                   [draggable]="false"
                   [resizable]="false"
                   [dismissableMask]="true"
                   styleClass="modern-dialog"
-                  [style]="{ width: 'min(700px, 95vw)' }">
+                  [style]="{ width: 'min(750px, 95vw)' }">
             
             <ng-template pTemplate="header">
                 <div class="flex items-center gap-4">
-                    <div class="w-14 h-14 rounded-2xl bg-blue-50 text-[#063970] flex items-center justify-center text-2xl shadow-sm">
+                    <div class="w-14 h-14 rounded-2xl bg-[#063970]/5 dark:bg-[#063970]/20 text-[#063970] dark:text-blue-300 flex items-center justify-center text-2xl shadow-sm">
                         <i class="pi pi-briefcase"></i>
                     </div>
                     <div>
-                        <h5 class="m-0 text-2xl font-black text-slate-800 tracking-tight">{{ selectedOffer?.title }}</h5>
-                        <p-tag [value]="isExpired(selectedOffer?.dateFin) ? 'Fermé' : selectedOffer?.badge" 
-                               [severity]="isExpired(selectedOffer?.dateFin) ? 'danger' : 'success'" 
-                               styleClass="text-[10px] font-black uppercase mt-1 px-3" />
+                        <h5 class="m-0 text-2xl font-black text-slate-800 dark:text-blue-50 tracking-tight">{{ selectedOffer?.title }}</h5>
+                        <p-tag [value]="selectedOffer?.badge" styleClass="text-[10px] font-black uppercase mt-1 px-3 !bg-[#063970] !text-white" />
                     </div>
                 </div>
             </ng-template>
 
             <ng-template pTemplate="content">
                 <div class="flex flex-col gap-8 py-6">
-                    <!-- Grid Content -->
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-                        <!-- Left: Description -->
                         <div class="flex flex-col gap-4">
-                            <h6 class="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                            <h6 class="text-xs font-black text-[#063970] dark:text-blue-300/40 uppercase tracking-widest flex items-center gap-2">
                                 <i class="pi pi-align-left"></i> Mission du stage
                             </h6>
-                            <p class="text-slate-600 leading-relaxed font-medium">
+                            <p class="text-slate-600 dark:text-blue-100/70 leading-relaxed font-medium">
                                 {{ selectedOffer?.desc }}
                                 <br><br>
-                                En tant que stagiaire chez SIGA, vous intégrerez une équipe dynamique de développeurs experts. Vous participerez activement au cycle de vie complet de nos projets, de l'analyse des besoins jusqu'au déploiement.
+                                En tant que stagiaire chez SIGA, vous intégrerez une équipe dynamique de développeurs experts. Vous participerez activement au cycle de vie complet de nos projets.
                             </p>
                         </div>
 
-                        <!-- Right: Techs & Details -->
                         <div class="flex flex-col gap-6">
-                            <div class="bg-slate-50 p-6 rounded-3xl border border-slate-100 flex flex-col gap-4">
-                                <h6 class="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                            <div class="bg-slate-50 dark:bg-blue-900/20 p-6 rounded-3xl border border-slate-100 dark:border-blue-800/40 flex flex-col gap-4">
+                                <h6 class="text-xs font-black text-[#063970] dark:text-blue-300/40 uppercase tracking-widest flex items-center gap-2">
                                     <i class="pi pi-code"></i> Stack Technique
                                 </h6>
                                 <div class="flex flex-wrap gap-2">
                                     <p-tag *ngFor="let tech of selectedOffer?.techs" [value]="tech" 
-                                           styleClass="!bg-white !text-slate-700 !border !border-slate-200 !font-bold py-2 px-3 rounded-xl shadow-sm" />
+                                           styleClass="!bg-white dark:!bg-blue-900/40 !text-slate-700 dark:!text-blue-100 !border !border-slate-200 dark:!border-blue-800/40 !font-bold py-2 px-3 rounded-xl shadow-sm" />
                                 </div>
                             </div>
 
                             <div class="flex flex-col gap-4 px-2">
                                 <div class="flex items-center gap-3">
-                                    <i class="pi pi-calendar-times text-blue-500 font-bold"></i>
-                                    <span class="text-sm font-bold text-slate-700">Date d'expiration : {{ selectedOffer?.dateFin | date:'dd/MM/yyyy' }}</span>
+                                    <i class="pi pi-clock text-[#063970] dark:text-blue-400 font-bold"></i>
+                                    <span class="text-sm font-bold text-slate-700 dark:text-blue-100/80">Durée : {{ internshipService.formatDuration(selectedOffer?.dureeStage) }}</span>
                                 </div>
                                 <div class="flex items-center gap-3">
-                                    <i class="pi pi-map-marker text-red-500 font-bold"></i>
-                                    <span class="text-sm font-bold text-slate-700">Lieu : {{ selectedOffer?.location }}</span>
+                                    <i class="pi pi-map-marker text-[#063970] dark:text-blue-400 font-bold"></i>
+                                    <span class="text-sm font-bold text-slate-700 dark:text-blue-100/80">Lieu : {{ selectedOffer?.location }}</span>
+                                </div>
+                                <div *ngIf="selectedOffer?.dateFin" class="flex items-center gap-3">
+                                    <i class="pi pi-calendar-times text-red-400 font-bold"></i>
+                                    <span class="text-sm font-bold text-slate-700 dark:text-blue-100/80">Expiration : {{ selectedOffer.dateFin | date:'dd MMMM yyyy' }}</span>
                                 </div>
                             </div>
-                        </div>
-                    </div>
-
-                    <div class="p-6 bg-[#063970]/5 rounded-3xl border border-[#063970]/10 border-dashed">
-                        <div class="flex items-center gap-4">
-                            <div class="w-10 h-10 rounded-full bg-white flex items-center justify-center text-[#063970] shadow-sm">
-                                <i class="pi pi-users"></i>
-                            </div>
-                            <span class="text-sm font-bold text-[#063970]">Stage pré-embauche : Opportunité de recrutement à la fin du stage.</span>
                         </div>
                     </div>
                 </div>
             </ng-template>
 
             <ng-template pTemplate="footer">
-                <div class="flex items-center justify-between w-full p-4 border-t border-slate-50 bg-slate-50/50 rounded-b-3xl">
-                    <p-button label="Fermer" [text]="true" severity="secondary" (onClick)="detailsDialog = false" />
-                    <p-button *ngIf="!isExpired(selectedOffer?.dateFin)"
-                             label="Postuler à ce stage" 
-                             icon="pi pi-arrow-right"
-                             iconPos="right"
-                             (onClick)="detailsDialog = false; openApplyDialog(selectedOffer)" 
-                             styleClass="!bg-[#063970] !border-none !rounded-xl !px-6 !py-3 !font-bold" />
-                    <p-button *ngIf="isExpired(selectedOffer?.dateFin)"
-                             label="Offre expirée" 
-                             icon="pi pi-lock"
-                             [disabled]="true"
-                             styleClass="!bg-slate-300 !text-slate-500 !border-none !rounded-xl !px-6 !py-3 !font-bold" />
+                <div class="flex items-center justify-between w-full p-4 border-t border-slate-50 dark:border-blue-800/40 bg-slate-50/50 dark:bg-blue-900/20 rounded-b-3xl">
+                    <p-button label="Fermer" [text]="true" severity="secondary" (onClick)="detailsDialog = false" styleClass="dark:!text-blue-200/60" />
+                    <ng-container *ngIf="!getApplicationStatus(selectedOffer?.id)">
+                        <p-button *ngIf="!hasActiveInternship() && !hasCompletedInternshipFor(selectedOffer?.id) && canUserApply()"
+                                 label="Postuler à ce stage" icon="pi pi-arrow-right" iconPos="right"
+                                 (onClick)="detailsDialog = false; openApplyDialog(selectedOffer)" 
+                                 styleClass="!bg-[#063970] !border-none !rounded-xl !px-6 !py-3 !font-bold shadow-lg" />
+
+                        <div *ngIf="!canUserApply()" class="flex items-center gap-2 text-slate-400 dark:text-slate-500 font-bold text-sm bg-slate-50 dark:bg-slate-900/50 px-4 py-2 rounded-xl border border-slate-100 dark:border-slate-800">
+                            <i class="pi pi-lock"></i>
+                            <span>Action réservée aux stagiaires</span>
+                        </div>
+                        
+                        <div *ngIf="hasActiveInternship()" class="flex items-center gap-2 text-amber-600 dark:text-amber-400 font-bold text-sm bg-amber-50 dark:bg-amber-900/20 px-4 py-2 rounded-xl border border-amber-100 dark:border-amber-900/30">
+                            <i class="pi pi-exclamation-triangle"></i>
+                            <span>Tu as déjà un stage ({{ stageActif()?.etat }})</span>
+                        </div>
+
+                        <div *ngIf="!hasActiveInternship() && hasCompletedInternshipFor(selectedOffer?.id)" class="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 font-bold text-sm bg-emerald-50 dark:bg-emerald-900/20 px-4 py-2 rounded-xl border border-emerald-100 dark:border-emerald-800/30">
+                            <i class="pi pi-verified"></i>
+                            <span>Stage déjà effectué et validé</span>
+                        </div>
+                    </ng-container>
+                    <p-tag *ngIf="getApplicationStatus(selectedOffer?.id) as status" 
+                           [value]="hasCompletedInternshipFor(selectedOffer?.id) ? 'DÉJÀ FAIT CE STAGE' : 'Déjà postulé : ' + status" 
+                           [severity]="hasCompletedInternshipFor(selectedOffer?.id) ? 'secondary' : getStatusSeverity(status)" 
+                           styleClass="px-4 py-2 font-black uppercase" />
+                </div>
+            </ng-template>
+        </p-dialog>
+
+        <!-- Apply Dialog -->
+        <p-dialog [(visible)]="applyDialog" [modal]="true" [draggable]="false" [resizable]="false" styleClass="modern-dialog" [style]="{ width: applyStep === 2 ? 'min(1000px, 98vw)' : 'min(580px, 95vw)' }">
+            <ng-template pTemplate="header">
+                <div class="flex items-center gap-4">
+                    <div class="p-3 bg-[#063970]/5 dark:bg-[#063970]/20 rounded-xl text-[#063970] dark:text-blue-300">
+                        <i class="pi pi-send text-xl"></i>
+                    </div>
+                    <div>
+                        <h4 class="m-0 text-xl font-black text-slate-900 dark:text-white">{{selectedOffer?.title}}</h4>
+                        <p class="text-xs text-slate-400 font-bold uppercase tracking-wider mt-0.5">Dossier de candidature</p>
+                    </div>
+                </div>
+            </ng-template>
+
+            <ng-template pTemplate="content">
+                <div *ngIf="applyStep === 1" class="py-6 space-y-8">
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="space-y-2">
+                            <label class="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Prénom</label>
+                            <input pInputText [(ngModel)]="applicationForm.firstName" placeholder="Prénom" class="w-full !rounded-xl !border-slate-200 dark:!border-slate-700 dark:!bg-slate-800" />
+                        </div>
+                        <div class="space-y-2">
+                            <label class="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Nom</label>
+                            <input pInputText [(ngModel)]="applicationForm.lastName" placeholder="Nom" class="w-full !rounded-xl !border-slate-200 dark:!border-slate-700 dark:!bg-slate-800" />
+                        </div>
+                    </div>
+
+                    <div class="space-y-6">
+                        <div class="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700 border-dashed group hover:border-[#063970] transition-colors">
+                            <div class="flex items-center gap-4">
+                                <div class="w-12 h-12 rounded-xl bg-white dark:bg-slate-800 shadow-sm border border-slate-100 dark:border-slate-700 flex items-center justify-center text-red-500">
+                                    <i class="pi pi-file-pdf text-xl"></i>
+                                </div>
+                                <div class="flex-1 overflow-hidden">
+                                    <p class="text-sm font-bold text-slate-900 dark:text-white truncate m-0">{{applicationForm.cvFile ? applicationForm.cvFile.name : 'Curriculum Vitae'}}</p>
+                                    <p class="text-[10px] font-bold text-slate-400 uppercase mt-0.5">Format PDF max 5Mo</p>
+                                </div>
+                                <p-fileUpload mode="basic" [auto]="true" chooseLabel="Télécharger" (onSelect)="onFileSelect($event, 'cv')" class="p-button-sm" />
+                            </div>
+                        </div>
+
+                        <div class="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700 border-dashed group hover:border-[#063970] transition-colors">
+                            <div class="flex items-center gap-4">
+                                <div class="w-12 h-12 rounded-xl bg-white dark:bg-slate-800 shadow-sm border border-slate-100 dark:border-slate-700 flex items-center justify-center text-blue-500">
+                                    <i class="pi pi-envelope text-xl"></i>
+                                </div>
+                                <div class="flex-1 overflow-hidden">
+                                    <p class="text-sm font-bold text-slate-900 dark:text-white truncate m-0">{{applicationForm.letterFile ? applicationForm.letterFile.name : 'Lettre de Motivation'}}</p>
+                                    <p class="text-[10px] font-bold text-slate-400 uppercase mt-0.5">Format PDF/DOC max 5Mo</p>
+                                </div>
+                                <p-fileUpload mode="basic" [auto]="true" chooseLabel="Télécharger" (onSelect)="onFileSelect($event, 'letter')" class="p-button-sm" />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div *ngIf="applyStep === 2" class="py-4">
+                    <app-test-take [test]="assignedTest" 
+                                 [timeLimit]="selectedOffer?.dureeStage"
+                                 [candidateInfo]="{firstName: applicationForm.firstName, lastName: applicationForm.lastName, candidatureId: createdCandidatureId!}"
+                                 (onTestCompleted)="onTestCompleted($event)" />
+                </div>
+
+                <div *ngIf="applyStep === 3" class="py-12 flex flex-col items-center text-center space-y-6">
+                    <div class="w-20 h-20 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-500 rounded-full flex items-center justify-center text-4xl animate-bounce">
+                        <i class="pi pi-check-circle"></i>
+                    </div>
+                    <div>
+                        <h4 class="text-2xl font-black text-slate-900 dark:text-white m-0">Candidature Envoyée !</h4>
+                        <p class="text-slate-500 dark:text-slate-400 mt-2">Votre dossier est maintenant entre les mains de nos recruteurs.</p>
+                    </div>
+                    <button pButton label="Terminer" class="p-button-primary !rounded-xl !px-12 !py-3 !font-black !bg-[#063970]" (click)="applyDialog = false"></button>
+                </div>
+            </ng-template>
+
+            <ng-template pTemplate="footer">
+                <div *ngIf="applyStep === 1" class="flex justify-end gap-3 p-4">
+                    <button pButton label="Annuler" class="p-button-text p-button-secondary" (click)="applyDialog = false"></button>
+                    <button pButton label="Continuer vers le test" icon="pi pi-arrow-right" iconPos="right" [disabled]="!isFormValid()" [loading]="isSubmitting" (click)="goToTestStep()" class="!rounded-xl !px-6 !font-black !bg-[#063970] !border-none"></button>
                 </div>
             </ng-template>
         </p-dialog>
 
         <p-toast />
+
+        <style>
+            .pricing-card {
+                background: white;
+                border: 1px solid #f1f5f9;
+                border-radius: 2rem;
+                display: flex;
+                flex-direction: column;
+                transition: all 0.5s cubic-bezier(0.165, 0.84, 0.44, 1);
+                position: relative;
+                overflow: visible;
+                height: 100%;
+            }
+
+            :host-context(.dark) .pricing-card {
+                background: #06111d;
+                border-color: #1e293b;
+            }
+
+            .pricing-card:hover {
+                transform: translateY(-12px);
+                box-shadow: 0 30px 60px -12px rgba(6, 57, 112, 0.12);
+                border-color: #063970;
+            }
+
+            :host-context(.dark) .pricing-card:hover {
+                box-shadow: 0 30px 60px -12px rgba(0, 0, 0, 0.4);
+            }
+
+            .featured {
+                border: 2px solid #063970;
+            }
+
+            .featured-badge {
+                position: absolute;
+                top: -12px;
+                right: 24px;
+                background: linear-gradient(135deg, #063970, #0a4a8f);
+                color: white;
+                padding: 6px 14px;
+                border-radius: 12px;
+                font-size: 10px;
+                font-weight: 900;
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                box-shadow: 0 8px 20px -4px rgba(6, 57, 112, 0.5);
+                z-index: 20;
+            }
+
+            .pricing-action-btn {
+                background: #063970 !important;
+                border: none !important;
+                color: white !important;
+            }
+
+            .pricing-action-btn:hover {
+                background: #0a4a8f !important;
+                transform: translateY(-2px);
+            }
+
+            .status-indicator {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                padding: 12px;
+                border-radius: 12px;
+                font-size: 10px;
+                font-weight: 900;
+                text-transform: uppercase;
+                letter-spacing: 1px;
+            }
+
+            .status-indicator.success { background: #f0fdf4; color: #15803d; border-color: #bbf7d0; }
+            .status-indicator.warn { background: #fffbeb; color: #b45309; border-color: #fef3c7; }
+            .status-indicator.danger { background: #fef2f2; color: #b91c1c; border-color: #fecaca; }
+        </style>
     `
 })
 export class InternshipList implements OnInit {
-    offers!: Signal<InternshipOffer[]>;
+    allOffers = signal<InternshipOffer[]>([]);
+    filteredOffers = signal<InternshipOffer[]>([]);
+    stageActif = signal<Stage | null>(null);
+    mesStages = signal<Stage[]>([]);
     applications!: Signal<InternshipApplication[]>;
-    
+
+    canUserApply = computed(() => {
+        const role = this.userService.currentUser()?.role;
+        return role !== 'Admin' && role !== 'RH' && role !== 'Encadrant';
+    });
+
     applyDialog = false;
     detailsDialog = false;
     selectedOffer: any = null;
     isSubmitting = false;
-    
+
     applicationForm = {
         firstName: '',
         lastName: '',
@@ -440,30 +478,91 @@ export class InternshipList implements OnInit {
     };
 
     private cdr = inject(ChangeDetectorRef);
-
-    constructor(
-        private internshipService: InternshipService,
-        private candidatureService: CandidatureService,
-        private testService: TestService,
-        private messageService: MessageService
-    ) {}
+    public internshipService = inject(InternshipService);
+    private candidatureService = inject(CandidatureService);
+    private testService = inject(TestService);
+    private messageService = inject(MessageService);
+    private userService = inject(UserService);
+    private router = inject(Router);
+    private http = inject(HttpClient);
+    private stageService = inject(StageService);
 
     applyStep = 1;
     assignedTest: TechnicalTest | null = null;
     testResult: { score: number, passed: boolean } | null = null;
     createdCandidatureId: number | null = null;
 
-    ngOnInit() {
-        this.offers = this.internshipService.getOffers();
+    async ngOnInit() {
+        await this.loadOffers();
+        await this.loadActiveStage();
+        await this.loadMesStages();
         this.applications = this.internshipService.getApplications();
     }
 
-    onGlobalFilter(table: any, event: Event) {
-        table.filterGlobal((event.target as HTMLInputElement).value, 'contains');
+    async loadActiveStage() {
+        try {
+            const stage = await this.stageService.getStageActif();
+            this.stageActif.set(stage);
+        } catch (err) {
+            this.stageActif.set(null);
+        }
     }
 
-    getApplicationStatus(title: string): string | null {
-        const app = this.applications().find(a => a.offerTitle === title);
+    async loadMesStages() {
+        try {
+            const stages = await this.stageService.getMesStages();
+            this.mesStages.set(stages);
+        } catch (err) {
+            console.error('Error loading mes stages', err);
+        }
+    }
+
+    hasCompletedInternshipFor(offerId: string | number | undefined): boolean {
+        if (!offerId) return false;
+        const id = typeof offerId === 'string' ? parseInt(offerId) : offerId;
+        return this.mesStages().some(s => s.offreStageId === id && s.etat === EtatStage.VALIDE);
+    }
+
+    hasActiveInternship() {
+        const stage = this.stageActif();
+        if (!stage) return false;
+        
+        return [EtatStage.ACCEPTE, EtatStage.EN_COURS, EtatStage.ATT_VALIDATION_ENCADRANT].includes(stage.etat);
+    }
+
+    async loadOffers() {
+        try {
+            let offers: InternshipOffer[] = [];
+            if (this.userService.currentUser()) {
+                offers = await this.internshipService.getOffersWithRecommendations();
+                this.internshipService.fetchApplications();
+            } else {
+                const dtos = await firstValueFrom(this.http.get<OffreStageDTO[]>('http://localhost:8081/api/offres'));
+                offers = dtos.map(dto => this.internshipService.mapToInternshipOffer(dto));
+            }
+            this.allOffers.set(offers);
+            this.filteredOffers.set(offers);
+        } catch (err) {
+            console.error('Error loading offers', err);
+        }
+    }
+
+    onSearch(event: any) {
+        const query = event.target.value.toLowerCase();
+        if (!query) {
+            this.filteredOffers.set(this.allOffers());
+            return;
+        }
+        const filtered = this.allOffers().filter(o => 
+            o.title.toLowerCase().includes(query) || 
+            o.techs.some(t => t.toLowerCase().includes(query)) ||
+            o.location?.toLowerCase().includes(query)
+        );
+        this.filteredOffers.set(filtered);
+    }
+
+    getApplicationStatus(offerId: string): string | null {
+        const app = this.applications().find(a => a.offerId === offerId);
         return app ? app.status : null;
     }
 
@@ -476,16 +575,20 @@ export class InternshipList implements OnInit {
         }
     }
 
-    isExpired(dateFin: any): boolean {
-        if (!dateFin) return false;
-        const end = new Date(dateFin);
-        const now = new Date();
-        return end < now;
-    }
-
     openApplyDialog(offer: any) {
+        const user = this.userService.currentUser();
+        if (!user) {
+            this.messageService.add({ severity: 'info', summary: 'Connexion requise', detail: 'Veuillez vous connecter pour postuler.' });
+            this.router.navigate(['/auth/login']);
+            return;
+        }
         this.selectedOffer = offer;
-        this.applicationForm = { firstName: '', lastName: '', cvFile: null, letterFile: null };
+        this.applicationForm = { 
+            firstName: user.firstName || '', 
+            lastName: user.lastName || '', 
+            cvFile: null, 
+            letterFile: null 
+        };
         this.applyStep = 1;
         this.testResult = null;
         this.assignedTest = null;
@@ -494,21 +597,16 @@ export class InternshipList implements OnInit {
 
     async goToTestStep() {
         if (!this.selectedOffer || !this.isFormValid()) return;
-
         this.isSubmitting = true;
         try {
-            // Create the candidature first to get its ID for the test attempt
-            const created = await this.candidatureService.create(
-                parseInt(this.selectedOffer.id),
-                this.applicationForm.lastName,
-                this.applicationForm.firstName,
-                this.applicationForm.cvFile!,
-                this.applicationForm.letterFile!
-            );
-            this.createdCandidatureId = created.id;
+            if (this.createdCandidatureId) {
+                await this.candidatureService.update(this.createdCandidatureId, this.applicationForm.lastName, this.applicationForm.firstName, this.applicationForm.cvFile!, this.applicationForm.letterFile!);
+            } else {
+                const created = await this.candidatureService.create(parseInt(this.selectedOffer.id), this.applicationForm.lastName, this.applicationForm.firstName, this.applicationForm.cvFile!, this.applicationForm.letterFile!);
+                this.createdCandidatureId = created.id;
+            }
 
             if (!this.selectedOffer?.selectedTestId) {
-                // No test: go straight to confirmation
                 this.applyStep = 3;
                 this.testResult = { score: 0, passed: false };
                 this.cdr.detectChanges();
@@ -519,7 +617,7 @@ export class InternshipList implements OnInit {
             this.applyStep = 2;
             this.cdr.detectChanges();
         } catch (err) {
-            this.messageService.add({ severity: 'error', summary: 'Erreur', detail: 'Impossible de soumettre le dossier ou de charger le test.' });
+            this.messageService.add({ severity: 'error', summary: 'Erreur', detail: 'Impossible de soumettre le dossier.' });
         } finally {
             this.isSubmitting = false;
         }
@@ -528,6 +626,8 @@ export class InternshipList implements OnInit {
     onTestCompleted(result: { score: number, passed: boolean }) {
         this.testResult = result;
         this.applyStep = 3;
+        this.internshipService.fetchOffers();
+        this.messageService.add({ severity: 'success', summary: 'Succès', detail: 'Candidature envoyée !' });
     }
 
     openDetailsDialog(offer: any) {
@@ -544,21 +644,6 @@ export class InternshipList implements OnInit {
     }
 
     isFormValid() {
-        return this.applicationForm.firstName.trim() && 
-               this.applicationForm.lastName.trim() && 
-               this.applicationForm.cvFile && 
-               this.applicationForm.letterFile;
-    }
-
-    async submitApplication() {
-        // Candidature already created in goToTestStep(); just close the dialog
-        this.messageService.add({ 
-            severity: 'success', 
-            summary: 'Candidature envoyée', 
-            detail: `Votre dossier pour "${this.selectedOffer?.title}" a été transmis avec succès.`, 
-            life: 5000 
-        });
-        this.applyDialog = false;
-        this.internshipService.fetchOffers();
+        return this.applicationForm.firstName.trim() && this.applicationForm.lastName.trim() && this.applicationForm.cvFile && this.applicationForm.letterFile;
     }
 }

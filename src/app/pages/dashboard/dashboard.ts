@@ -1,25 +1,38 @@
-import { Component } from '@angular/core';
-import { NotificationsWidget } from './components/notificationswidget';
-import { StatsWidget } from './components/statswidget';
-import { RecentSalesWidget } from './components/recentsaleswidget';
-import { BestSellingWidget } from './components/bestsellingwidget';
-import { RevenueStreamWidget } from './components/revenuestreamwidget';
+import { Component, inject, computed } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { UserService } from '../../services/user.service';
+import { AdminDashboard } from './components/admin-dashboard';
+import { RHDashboard } from './components/rh-dashboard';
+import { EncadrantDashboard } from './components/encadrant-dashboard';
+import { StagiaireDashboard } from './components/stagiaire-dashboard';
 
 @Component({
     selector: 'app-dashboard',
-    imports: [StatsWidget, RecentSalesWidget, BestSellingWidget, RevenueStreamWidget, NotificationsWidget],
+    standalone: true,
+    imports: [
+        CommonModule, 
+        AdminDashboard, 
+        RHDashboard, 
+        EncadrantDashboard, 
+        StagiaireDashboard
+    ],
     template: `
-        <div class="grid grid-cols-12 gap-8">
-            <app-stats-widget class="contents" />
-            <div class="col-span-12 xl:col-span-6">
-                <app-recent-sales-widget />
-                <app-best-selling-widget />
+        <ng-container [ngSwitch]="userRole()">
+            <app-admin-dashboard *ngSwitchCase="'Admin'" />
+            <app-rh-dashboard *ngSwitchCase="'RH'" />
+            <app-encadrant-dashboard *ngSwitchCase="'Encadrant'" />
+            <app-stagiaire-dashboard *ngSwitchCase="'Stagiaire'" />
+            <div *ngSwitchDefault class="card">
+                <div class="text-center py-20">
+                    <i class="pi pi-lock text-5xl text-muted-color mb-4"></i>
+                    <div class="text-2xl font-bold">Accès Restreint</div>
+                    <p class="text-muted-color mt-2">Vous n'avez pas de tableau de bord associé à votre rôle.</p>
+                </div>
             </div>
-            <div class="col-span-12 xl:col-span-6">
-                <app-revenue-stream-widget />
-                <app-notifications-widget />
-            </div>
-        </div>
+        </ng-container>
     `
 })
-export class Dashboard {}
+export class Dashboard {
+    private userService = inject(UserService);
+    userRole = computed(() => this.userService.currentUser()?.role);
+}

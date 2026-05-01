@@ -64,6 +64,7 @@ interface ExercicePrep {
         <p-toolbar styleClass="mb-6">
             <ng-template #start>
                 <p-button label="Nouveau" icon="pi pi-plus" severity="secondary" class="mr-2" (onClick)="openNew()" />
+                <p-button label="Générer test avec IA" icon="pi pi-bolt" severity="help" class="mr-2" (onClick)="openGenerateIADialog()" />
                 <p-button label="Supprimer" icon="pi pi-trash" severity="secondary" [outlined]="true" (onClick)="deleteSelectedTests()" [disabled]="!selectedTests || !selectedTests.length" />
             </ng-template>
             <ng-template #end>
@@ -132,11 +133,11 @@ interface ExercicePrep {
                         </div>
                     </td>
                     <td>
-                        <p-button icon="pi pi-users" label="Tentatives" pTooltip="Consulter les tentatives" tooltipPosition="top" size="small" [outlined]="true" severity="secondary" (click)="viewAttempts(test)" />
+                        <p-button icon="pi pi-users" [label]="(attemptCountsMap()[test.id] || 0) + ' Tentatives'"  pTooltip="Consulter les tentatives" tooltipPosition="top" size="small" [outlined]="true" severity="secondary" (click)="viewAttempts(test)" />
                     </td>
                     <td>
                         <div class="flex items-center gap-2">
-                            <p-button  icon="pi pi-eye" pTooltip="Aperçu candidat" tooltipPosition="top" [text]="true" size="small" [style]="{'color':'#063970'}" (click)="openPreview(test)" />
+                            <p-button  icon="pi pi-eye" pTooltip="Aperçu test" tooltipPosition="top" [text]="true" size="small" [style]="{'color':'#063970'}" (click)="openPreview(test)" />
                             <p-button  icon="pi pi-pencil" pTooltip="Modifier" tooltipPosition="top" [text]="true" size="small" (click)="editTest(test)" />
                             <p-button icon="pi pi-trash" pTooltip="Supprimer" tooltipPosition="top" [rounded]="true" [text]="true" size="small" severity="danger" (click)="deleteTest(test)" />
                         </div>
@@ -752,7 +753,7 @@ interface ExercicePrep {
                             <div class="flex flex-col">
                                 <span class="text-[9px] font-black text-gray-400 uppercase tracking-widest leading-none">Score</span>
                                 <span class="text-lg font-black leading-none mt-1" [ngClass]="attempt.passed ? 'text-green-600' : 'text-red-500'">
-                                    {{ attempt.score }}%
+                                    {{ attempt.score  | number:'1.0-2' }}%
                                 </span>
                             </div>
                             <div class="h-8 w-px bg-gray-200"></div>
@@ -808,6 +809,21 @@ interface ExercicePrep {
             </ng-template>
         </p-dialog>
 
+        <!-- Dialog Générer test avec IA -->
+        <p-dialog [(visible)]="generateIADialog" [style]="{'width':'450px'}" header="Générer un test avec IA" [modal]="true" class="p-fluid">
+            <ng-template #content>
+                <div class="flex flex-col gap-4 mt-2">
+                    <label class="font-bold">Sélectionnez une offre de stage</label>
+                    <p-select [(ngModel)]="selectedOfferForIA" [options]="offers()" optionLabel="title" optionValue="id" placeholder="Choisir une offre" appendTo="body" [filter]="true" filterBy="title" class="w-full"></p-select>
+                    <small class="text-gray-500">Un test adapté sera généré automatiquement via l'IA pour l'offre sélectionnée.</small>
+                </div>
+            </ng-template>
+            <ng-template #footer>
+                <p-button label="Annuler" icon="pi pi-times" [text]="true" (click)="generateIADialog=false" />
+                <p-button label="Générer" icon="pi pi-bolt" [style]="{'background-color':'#8b5cf6','border-color':'#8b5cf6'}" (click)="confirmGenerateIA()" [loading]="isGeneratingIA" />
+            </ng-template>
+        </p-dialog>
+
         <p-confirmDialog [style]="{'width':'450px'}" />
         <p-toast />
     `,
@@ -823,6 +839,9 @@ export class TestManagement implements OnInit {
     previewDialog = false; // New preview state
     addExerciceDialog = false;
     addQuestionDialog = false;
+    generateIADialog = false;
+    isGeneratingIA = false;
+    selectedOfferForIA: string | null = null;
     removedExerciceIds: string[] = []; // Track exercises removed during wizard update
     removedQuestionIds: { [exTempId: string]: string[] } = {}; // Track questions removed per exercise prep
 
@@ -833,6 +852,7 @@ export class TestManagement implements OnInit {
     offers: Signal<InternshipOffer[]>;
     exercices: Signal<Exercice[]>;
     questions: Signal<Question[]>;
+    attemptCountsMap = signal<{ [key: string]: number }>({});
 
     // ─── Wizard state ──────────────────────────────────
     wizardStep = 1;
@@ -908,6 +928,24 @@ export class TestManagement implements OnInit {
             }
             return value.some((v: any) => filter.includes(v));
         });
+        this.loadAttemptsCounts();
+    }
+
+    async loadAttemptsCounts() {
+        try {
+            const allAttempts = await this.testAttemptService.getAllAttempts();
+            const counts: { [key: string]: number } = {};
+            if (allAttempts && allAttempts.length > 0) {
+                for (const attempt of allAttempts) {
+                    if (attempt.testId) {
+                        counts[attempt.testId.toString()] = (counts[attempt.testId.toString()] || 0) + 1;
+                    }
+                }
+            }
+            this.attemptCountsMap.set(counts);
+        } catch (err) {
+            console.error('Failed to load attempt counts', err);
+        }
     }
 
     // ─── Helpers ───────────────────────────────────────
@@ -925,12 +963,12 @@ export class TestManagement implements OnInit {
     getOneOfferName(offerId: string): string {
         return this.offers().find(o => o.id === offerId)?.title ?? 'N/A';
     }
-    
+
     getOfferName(offerIds: string[]): string {
         if (!offerIds?.length) return 'N/A';
         return offerIds.map(id => this.getOneOfferName(id)).join(', ');
     }
-    
+
     getAvailableExercices(): Exercice[] {
         let currentTestId: string | undefined;
         let localExistingIds = new Set<string>();
@@ -994,7 +1032,7 @@ export class TestManagement implements OnInit {
             return true;
         });
     }
-    
+
     getQuestionById(id: string): Question | undefined {
         return this.questions().find(q => q.id === id);
     }
@@ -1063,7 +1101,7 @@ export class TestManagement implements OnInit {
     onOfferFilter(table: Table, event: any) {
         table.filter(event.value, 'offerIds', 'offerIntersect');
     }
-    
+
     // wizard-related logic simplified since multiselect binds directly to test.offerIds
 
     // ─── Open new wizard ───────────────────────────────
@@ -1164,14 +1202,14 @@ export class TestManagement implements OnInit {
                     if (existingEx) {
                         const currentTestIds = existingEx.testIds || (existingEx.testId ? [existingEx.testId] : []);
                         const updatedTestIds = currentTestIds.includes(testId) ? currentTestIds : [...currentTestIds, testId];
-                        
+
                         // Also update title if changed in prep
                         const updatedTitle = ex.titre?.trim() || existingEx.titre;
                         if (updatedTitle !== existingEx.titre || !currentTestIds.includes(testId)) {
-                            await this.exerciceService.updateExercice({ 
-                                ...existingEx, 
+                            await this.exerciceService.updateExercice({
+                                ...existingEx,
                                 titre: updatedTitle,
-                                testIds: updatedTestIds 
+                                testIds: updatedTestIds
                             });
                         }
                         exerciceId = existingEx.id;
@@ -1196,13 +1234,13 @@ export class TestManagement implements OnInit {
                         if (existingQ) {
                             const currentExIds = existingQ.exerciceIds || [];
                             const updatedExIds = currentExIds.includes(exerciceId) ? currentExIds : [...currentExIds, exerciceId];
-                            
+
                             // Map prep data to question fields if it was edited
                             const updatedQ: any = { ...existingQ, exerciceIds: updatedExIds };
                             if (q.enonce) {
                                 updatedQ.enonce = q.enonce;
                                 if (q.typeQuestion) updatedQ.typeQuestion = q.typeQuestion;
-                                
+
                                 if (q.typeQuestion === 'QCU' || q.typeQuestion === 'QCM') {
                                     if (q.propositions) {
                                         updatedQ.propositions = q.propositions.map((p: any) => p.text);
@@ -1383,7 +1421,7 @@ export class TestManagement implements OnInit {
                 this.qType = eq.typeQuestion;
                 this.qTrueFalse = (eq.typeQuestion === 'TRUE_FALSE' && eq.reponsesCorrectes?.length) ? eq.reponsesCorrectes[0] : 'Vrai';
                 this.qReponseLibre = (eq.typeQuestion === 'QUESTION_REPONSE' && eq.reponsesCorrectes?.length) ? eq.reponsesCorrectes[0] : '';
-                
+
                 if (eq.typeQuestion === 'QCU' || eq.typeQuestion === 'QCM') {
                     this.props = (eq.propositions || []).map(p => ({
                         text: p,
@@ -1436,9 +1474,9 @@ export class TestManagement implements OnInit {
             } else if (this.targetExIdx === -1) {
                 this.quickAddQuestions[this.targetQIdx] = data;
             } else if (this.targetExIdx === -5) { // Direct View Edit
-                const updatedQ: any = { 
+                const updatedQ: any = {
                     id: this.qExistingId!,
-                    enonce: data.enonce!, 
+                    enonce: data.enonce!,
                     typeQuestion: data.typeQuestion!,
                     exerciceIds: this.getQuestionById(this.qExistingId!)?.exerciceIds || []
                 };
@@ -1467,9 +1505,9 @@ export class TestManagement implements OnInit {
                     if (existingQ) {
                         const currentExIds = existingQ.exerciceIds || [];
                         if (!currentExIds.includes(exerciceId)) {
-                            await this.questionService.updateQuestion({ 
-                                ...existingQ, 
-                                exerciceIds: [...currentExIds, exerciceId] 
+                            await this.questionService.updateQuestion({
+                                ...existingQ,
+                                exerciceIds: [...currentExIds, exerciceId]
                             });
                         }
                     }
@@ -1478,10 +1516,10 @@ export class TestManagement implements OnInit {
                     const type = data.typeQuestion;
                     if (!enonce || !type) return;
                     // For new questions being added directly to an exercise
-                    const persistsQ: any = { 
-                        enonce: enonce, 
-                        typeQuestion: type, 
-                        exerciceIds: [exerciceId] 
+                    const persistsQ: any = {
+                        enonce: enonce,
+                        typeQuestion: type,
+                        exerciceIds: [exerciceId]
                     };
                     if (data.typeQuestion === 'QCU' || data.typeQuestion === 'QCM') {
                         persistsQ.propositions = (data.propositions || []).map(p => p.text);
@@ -1525,7 +1563,7 @@ export class TestManagement implements OnInit {
     refreshCurrentView() {
         if (this.selectedTestForExercice) {
             const testId = this.selectedTestForExercice.id;
-            
+
             // Capture current expansion states
             const expandedMap = new Map<string, boolean>();
             this.associatedExercices.forEach(ex => {
@@ -1555,14 +1593,14 @@ export class TestManagement implements OnInit {
                 try {
                     const currentTestIds = ex.testIds || (ex.testId ? [ex.testId] : []);
                     const updatedTestIds = currentTestIds.filter((id: string) => id !== testId);
-                    
+
                     await this.exerciceService.updateExercice({
                         ...ex,
                         testIds: updatedTestIds
                     });
 
                     this.messageService.add({ severity: 'success', summary: 'Succès', detail: 'Exercice détaché avec succès' });
-                    
+
                     this.testService.fetchTests();
                     this.exerciceService.fetchExercices();
                     this.refreshCurrentView();
@@ -1619,7 +1657,7 @@ export class TestManagement implements OnInit {
             isCorrect: q.reponsesCorrectes?.includes(p) || false
         }));
         if (this.props.length === 0) this.props = [{ text: '', isCorrect: false }, { text: '', isCorrect: false }];
-        
+
         this.qExistingId = q.id;
         this.submittedQ = false;
         this.addQuestionDialog = true;
@@ -1707,7 +1745,7 @@ export class TestManagement implements OnInit {
             if (!this.quickExExistingId || !this.selectedTestForExercice.id) return;
             const ex = this.exercices().find(e => e.id === this.quickExExistingId);
             if (!ex) return;
-            
+
             const currentTestIds = ex.testIds || (ex.testId ? [ex.testId] : []);
             if (!currentTestIds.includes(this.selectedTestForExercice.id)) {
                 await this.exerciceService.updateExercice({ ...ex, testIds: [...currentTestIds, this.selectedTestForExercice.id] });
@@ -1786,5 +1824,28 @@ export class TestManagement implements OnInit {
                 this.messageService.add({ severity: 'success', summary: 'Succès', detail: 'Tests supprimés', life: 3000 });
             }
         });
+    }
+
+    openGenerateIADialog() {
+        this.selectedOfferForIA = null;
+        this.generateIADialog = true;
+    }
+
+    async confirmGenerateIA() {
+        if (!this.selectedOfferForIA) {
+            this.messageService.add({ severity: 'error', summary: 'Erreur', detail: 'Veuillez sélectionner une offre.', life: 3000 });
+            return;
+        }
+
+        this.isGeneratingIA = true;
+        try {
+            await this.testService.generateFromOffre(this.selectedOfferForIA);
+            this.messageService.add({ severity: 'success', summary: 'Succès', detail: 'Test généré avec succès par l\'IA.', life: 3000 });
+            this.generateIADialog = false;
+        } catch (err) {
+             this.messageService.add({ severity: 'error', summary: 'Erreur', detail: 'Erreur lors de la génération du test.', life: 3000 });
+        } finally {
+            this.isGeneratingIA = false;
+        }
     }
 }

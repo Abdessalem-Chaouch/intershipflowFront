@@ -15,9 +15,9 @@ registerLocaleData(localeFr);
     selector: 'app-test-candidate-preview',
     standalone: true,
     imports: [
-        CommonModule, 
-        DialogModule, 
-        ButtonModule, 
+        CommonModule,
+        DialogModule,
+        ButtonModule,
         TagModule,
         DividerModule
     ],
@@ -167,7 +167,7 @@ export class TestCandidatePreviewComponent implements OnChanges {
     }
 
     getSeverity(type: string): any {
-        switch(type) {
+        switch (type) {
             case 'QCU': return 'info';
             case 'QCM': return 'warn';
             case 'TRUE_FALSE': return 'success';

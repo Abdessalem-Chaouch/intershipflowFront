@@ -1,4 +1,4 @@
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnInit, inject, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FileUploadModule } from 'primeng/fileupload';
 import { CardModule } from 'primeng/card';
@@ -9,6 +9,7 @@ import { ConfirmationService, MessageService } from 'primeng/api';
 import { DocumentStageService, DocumentStage, TypeDocument } from '@/app/services/document-stage.service';
 import { TooltipModule } from 'primeng/tooltip';
 import { TagModule } from 'primeng/tag';
+import { StageService, Stage, EtatStage } from '@/app/services/stage.service';
 
 @Component({
     selector: 'app-stagiaire-documents',
@@ -28,6 +29,21 @@ import { TagModule } from 'primeng/tag';
                     Déposez vos documents officiels (Convention, Rapport, Présentation) par simple glisser-déposer.
                     Vous pouvez modifier vos documents tant qu'ils n'ont pas été définitivement validés par votre encadrant.
                 </p>
+            </div>
+
+            <!-- Warning Banner -->
+            <div *ngIf="!isStageEnCours()" class="mb-8 p-6 rounded-3xl bg-amber-50/50 dark:bg-amber-900/10 border border-amber-100/50 dark:border-amber-800/30 flex items-center gap-5 backdrop-blur-sm animate-in fade-in slide-in-from-top-4 duration-700">
+                <div class="w-12 h-12 rounded-2xl bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center text-amber-600 dark:text-amber-400 shrink-0 shadow-sm">
+                    <i class="pi pi-lock text-2xl"></i>
+                </div>
+                <div>
+                    <h4 class="text-amber-800 dark:text-amber-300 font-black m-0 text-lg uppercase tracking-tight">Dépôt verrouillé</h4>
+                    <p class="text-amber-700/80 dark:text-amber-400/80 text-sm m-0 font-medium leading-relaxed">
+                        Le dépôt de documents sera disponible dès que votre stage passera à l'état <span class="font-bold text-amber-600 dark:text-amber-400 uppercase">En Cours</span>.
+                        <span *ngIf="monStage()?.etat === 'ACCEPTE'" class="block mt-1">État actuel : <span class="font-bold">Accepté</span> (En attente de démarrage).</span>
+                        <span *ngIf="!monStage()" class="block mt-1">Aucun stage actif n'a été détecté pour votre compte.</span>
+                    </p>
+                </div>
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6 items-stretch">
@@ -110,7 +126,13 @@ import { TagModule } from 'primeng/tag';
                                 </p>
                             </div>
 
-                            <div class="flex items-center gap-2" *ngIf="!doc.validationEncadrant">
+                            <div class="flex items-center gap-2 mb-3">
+                                <button (click)="download(doc)" [disabled]="!doc.alfrescoNodeId" class="flex-1 py-2 px-3 rounded-lg border border-blue-100 dark:border-blue-900/30 text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors flex items-center justify-center gap-2 disabled:opacity-50">
+                                    <i class="pi pi-download"></i> Télécharger
+                                </button>
+                            </div>
+
+                            <div class="flex items-center gap-2" *ngIf="!doc.validationEncadrant && isStageEnCours()">
                                 <!-- Bouton Remplacer (utilise fileUpload en mode invisible) -->
                                 <div class="flex-1 overflow-hidden relative">
                                     <input type="file" (change)="onReplaceFile($event, doc)" class="absolute inset-0 opacity-0 cursor-pointer z-10 w-full" accept=".pdf,.docx,.ppt,.pptx" />
@@ -123,17 +145,22 @@ import { TagModule } from 'primeng/tag';
                                 </button>
                             </div>
 
-                            <div *ngIf="doc.validationEncadrant" class="text-[11px] font-bold text-slate-400 dark:text-slate-500 text-center uppercase tracking-wider py-1">
-                                Les modifications sont bloquées (Validé)
+                            <div *ngIf="doc.validationEncadrant" class="text-[11px] font-bold text-green-600 dark:text-green-400 text-center uppercase tracking-wider py-2 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                                <i class="pi pi-verified mr-1"></i> Document Validé
+                            </div>
+
+                            <div *ngIf="!doc.validationEncadrant && !isStageEnCours()" class="text-[11px] font-bold text-amber-500 dark:text-amber-400 text-center uppercase tracking-wider py-2 bg-amber-50 dark:bg-amber-900/20 rounded-lg">
+                                <i class="pi pi-lock mr-1"></i> Dépôt verrouillé
                             </div>
                         </div>
                     </div>
 
                     <!-- STATE 2: EMPTY (Dropzone) -->
                     <div *ngIf="!getDoc(type)" class="mt-auto flex-1 flex flex-col">
-                        <div class="relative w-full rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-700 hover:border-blue-400 dark:hover:border-blue-500 hover:bg-blue-50/50 dark:hover:bg-blue-900/20 transition-all duration-300 group/dropzone flex flex-col items-center flex-1 justify-center min-h-[140px] p-6 text-center cursor-pointer overflow-hidden">
+                        <div [ngClass]="{'opacity-40 grayscale pointer-events-none select-none': !isStageEnCours()}"
+                             class="relative w-full rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-700 hover:border-blue-400 dark:hover:border-blue-500 hover:bg-blue-50/50 dark:hover:bg-blue-900/20 transition-all duration-300 group/dropzone flex flex-col items-center flex-1 justify-center min-h-[140px] p-6 text-center cursor-pointer overflow-hidden">
                             
-                            <input type="file" (change)="onUploadNewFile($event, type)" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20" accept=".pdf,.doc,.docx,.ppt,.pptx" />
+                            <input type="file" *ngIf="isStageEnCours()" (change)="onUploadNewFile($event, type)" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20" accept=".pdf,.doc,.docx,.ppt,.pptx" />
                             
                             <div class="w-12 h-12 shrink-0 rounded-full bg-slate-50 dark:bg-slate-800 group-hover/dropzone:bg-white dark:group-hover/dropzone:bg-slate-700 group-hover/dropzone:shadow-sm flex items-center justify-center mb-3 transition-all duration-300 text-slate-400 dark:text-slate-500 group-hover/dropzone:text-blue-500 dark:group-hover/dropzone:text-blue-400 group-hover/dropzone:-translate-y-1">
                                 <i class="pi pi-cloud-upload text-xl"></i>
@@ -154,13 +181,35 @@ import { TagModule } from 'primeng/tag';
 })
 export class StagiaireDocumentsComponent implements OnInit {
     private documentService = inject(DocumentStageService);
+    private stageService = inject(StageService);
     private messageService = inject(MessageService);
     private confirmationService = inject(ConfirmationService);
 
-    documents: any;
+    documents = signal<DocumentStage[]>([]);
+    monStage = signal<Stage | null>(null);
+    isStageEnCours = computed(() => this.monStage()?.etat === EtatStage.EN_COURS);
 
     ngOnInit() {
-        this.documents = this.documentService.getDocuments();
+        this.loadStage();
+        this.loadMesDocuments();
+    }
+
+    async loadStage() {
+        try {
+            const stage = await this.stageService.getStageActif();
+            this.monStage.set(stage);
+        } catch (err) {
+            console.error('Error loading active stage', err);
+        }
+    }
+
+    async loadMesDocuments() {
+        try {
+            const docs = await this.documentService.getMesDocuments();
+            this.documents.set(docs);
+        } catch (err) {
+            console.error('Error loading documents', err);
+        }
     }
 
     getDoc(type: TypeDocument): DocumentStage | undefined {
@@ -174,6 +223,7 @@ export class StagiaireDocumentsComponent implements OnInit {
         try {
             await this.documentService.createDocument(type, file);
             this.messageService.add({ severity: 'success', summary: 'Fichier ajouté', detail: 'Le document a été envoyé avec succès.' });
+            this.loadMesDocuments(); // Refresh local list
             event.target.value = ''; // Reset input
         } catch (err) {
             this.messageService.add({ severity: 'error', summary: 'Erreur', detail: "Échec de l'envoi du fichier." });
@@ -185,8 +235,9 @@ export class StagiaireDocumentsComponent implements OnInit {
         const file = event.target.files[0];
 
         try {
-            await this.documentService.updateDocument(doc.id, doc.type, doc.noteEncadrant ?? undefined, doc.validationEncadrant ?? undefined, file);
+            await this.documentService.updateDocument(doc.id, doc.type, doc.noteEncadrant ?? undefined, doc.validationEncadrant ?? undefined, undefined, file);
             this.messageService.add({ severity: 'success', summary: 'Fichier remplacé', detail: 'Le document a été mis à jour.' });
+            this.loadMesDocuments(); // Refresh local list
             event.target.value = ''; // Reset input
         } catch (err) {
             this.messageService.add({ severity: 'error', summary: 'Erreur', detail: 'Échec de la mise à jour.' });
@@ -202,10 +253,17 @@ export class StagiaireDocumentsComponent implements OnInit {
                 try {
                     await this.documentService.deleteDocument(doc.id);
                     this.messageService.add({ severity: 'success', summary: 'Document supprimé', detail: 'Le document a été retiré.' });
+                    this.loadMesDocuments(); // Refresh local list
                 } catch (err) {
                     this.messageService.add({ severity: 'error', summary: 'Erreur', detail: 'Impossible de supprimer ce document.' });
                 }
             }
         });
+    }
+
+    download(doc: DocumentStage) {
+        if (doc.alfrescoNodeId && doc.fileName) {
+            this.documentService.downloadFile(doc.alfrescoNodeId, doc.fileName);
+        }
     }
 }

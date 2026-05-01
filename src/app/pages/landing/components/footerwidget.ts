@@ -1,9 +1,16 @@
-import { Component } from '@angular/core';
+import { Component, inject } from '@angular/core';
 import { Router, RouterModule } from '@angular/router';
+import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
+import { ContactService, ContactRequest } from '@/app/services/contact.service';
+import { MessageService } from 'primeng/api';
+import { ToastModule } from 'primeng/toast';
 
 @Component({
     selector: 'footer-widget',
-    imports: [RouterModule],
+    standalone: true,
+    imports: [RouterModule, CommonModule, FormsModule, ToastModule],
+    providers: [MessageService],
     template: `
         <!-- Contact Section -->
         <div id="contact" class="py-20 px-6 lg:px-20 mx-0 lg:mx-20 bg-slate-50 dark:bg-[#021427] rounded-3xl transition-colors border border-gray-100 dark:border-blue-900/30 shadow-sm mt-10">
@@ -62,38 +69,39 @@ import { Router, RouterModule } from '@angular/router';
                 <!-- RIGHT SIDE (Contact Form) -->
                 <div class="col-span-12 md:col-span-7 h-full">
 
-                    <form class="h-full p-8 lg:p-10 bg-white dark:bg-[#063970] rounded-3xl border border-gray-100 dark:border-blue-800/40 shadow-xl dark:shadow-none flex flex-col gap-6 transition-all">
+                    <form (ngSubmit)="onSubmit()" #contactFormRef="ngForm" class="h-full p-8 lg:p-10 bg-white dark:bg-[#063970] rounded-3xl border border-gray-100 dark:border-blue-800/40 shadow-xl dark:shadow-none flex flex-col gap-6 transition-all">
 
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div class="flex flex-col gap-2">
                                 <label class="text-gray-700 dark:text-blue-50 font-semibold transition-colors text-lg">Nom complet</label>
-                                <input type="text" placeholder="Votre nom"
+                                <input type="text" name="name" [(ngModel)]="contactForm.name" required placeholder="Votre nom"
                                     class="border-2 border-gray-100 dark:border-blue-900/50 dark:bg-[#021427] dark:placeholder:text-blue-200/30 dark:text-white rounded-xl px-4 py-3 text-base outline-none focus:border-[#063970] dark:focus:border-blue-400 transition-all shadow-sm focus:shadow-md" />
                             </div>
 
                             <div class="flex flex-col gap-2">
                                 <label class="text-gray-700 dark:text-blue-50 font-semibold transition-colors text-lg">Adresse email</label>
-                                <input type="email" placeholder="votre@email.com"
+                                <input type="email" name="email" [(ngModel)]="contactForm.email" required email placeholder="votre@email.com"
                                     class="border-2 border-gray-100 dark:border-blue-900/50 dark:bg-[#021427] dark:placeholder:text-blue-200/30 dark:text-white rounded-xl px-4 py-3 text-base outline-none focus:border-[#063970] dark:focus:border-blue-400 transition-all shadow-sm focus:shadow-md" />
                             </div>
                         </div>
 
                         <div class="flex flex-col gap-2">
                             <label class="text-gray-700 dark:text-blue-50 font-semibold transition-colors text-lg">Objet</label>
-                            <input type="text" placeholder="Sujet de votre message"
+                            <input type="text" name="subject" [(ngModel)]="contactForm.subject" required placeholder="Sujet de votre message"
                                 class="border-2 border-gray-100 dark:border-blue-900/50 dark:bg-[#021427] dark:placeholder:text-blue-200/30 dark:text-white rounded-xl px-4 py-3 text-base outline-none focus:border-[#063970] dark:focus:border-blue-400 transition-all shadow-sm focus:shadow-md" />
                         </div>
 
                         <div class="flex flex-col gap-2">
                             <label class="text-gray-700 dark:text-blue-50 font-semibold transition-colors text-lg">Message</label>
-                            <textarea rows="4" placeholder="Votre message détaillé..."
+                            <textarea name="message" [(ngModel)]="contactForm.message" required rows="4" placeholder="Votre message détaillé..."
                                 class="border-2 border-gray-100 dark:border-blue-900/50 dark:bg-[#021427] dark:placeholder:text-blue-200/30 dark:text-white rounded-xl px-4 py-3 text-base outline-none focus:border-[#063970] dark:focus:border-blue-400 transition-all shadow-sm focus:shadow-md resize-none"></textarea>
                         </div>
 
                         <!-- mt-auto to push button to the bottom if container is larger -->
-                        <button type="submit"
-                            class="mt-auto bg-[#063970] dark:bg-blue-500 text-white font-bold py-4 rounded-xl hover:bg-blue-900 dark:hover:bg-blue-400 transition-all text-xl cursor-pointer border-none shadow-lg hover:shadow-xl hover:translate-y-[-2px] active:translate-y-[0px]">
-                            Envoyer le message <i class="pi pi-send ml-2"></i>
+                        <button type="submit" [disabled]="!contactFormRef.valid || isSubmitting"
+                            class="mt-auto bg-[#063970] dark:bg-blue-500 text-white font-bold py-4 rounded-xl hover:bg-blue-900 dark:hover:bg-blue-400 transition-all text-xl cursor-pointer border-none shadow-lg hover:shadow-xl hover:translate-y-[-2px] active:translate-y-[0px] disabled:opacity-50 disabled:cursor-not-allowed">
+                            <span *ngIf="!isSubmitting">Envoyer le message <i class="pi pi-send ml-2"></i></span>
+                            <span *ngIf="isSubmitting">Envoi en cours... <i class="pi pi-spin pi-spinner ml-2"></i></span>
                         </button>
 
                     </form>
@@ -167,8 +175,57 @@ import { Router, RouterModule } from '@angular/router';
                 </p>
             </div>
         </div>
+        <p-toast />
     `
 })
 export class FooterWidget {
+    contactForm: ContactRequest = {
+        name: '',
+        email: '',
+        subject: '',
+        message: ''
+    };
+    isSubmitting = false;
+
+    private contactService = inject(ContactService);
+    private messageService = inject(MessageService);
+
     constructor(public router: Router) { }
+
+    onSubmit() {
+        if (this.isSubmitting) return;
+
+        this.isSubmitting = true;
+        this.contactService.sendContactMessage(this.contactForm).subscribe({
+            next: (response) => {
+                this.messageService.add({
+                    severity: 'success',
+                    summary: 'Succès',
+                    detail: response.message || 'Votre message a été envoyé avec succès.',
+                    life: 5000
+                });
+                this.resetForm();
+                this.isSubmitting = false;
+            },
+            error: (error) => {
+                console.error('Erreur lors de l\'envoi du message:', error);
+                this.messageService.add({
+                    severity: 'error',
+                    summary: 'Erreur',
+                    detail: 'Une erreur est survenue lors de l\'envoi du message. Veuillez réessayer.',
+                    life: 5000
+                });
+                this.isSubmitting = false;
+            }
+        });
+    }
+
+    resetForm() {
+        this.contactForm = {
+            name: '',
+            email: '',
+            subject: '',
+            message: ''
+        };
+    }
 }

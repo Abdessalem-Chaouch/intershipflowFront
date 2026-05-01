@@ -77,10 +77,16 @@ import { DocumentStageService, DocumentStage } from '@/app/services/document-sta
                         <tr class="dark:bg-slate-800/50 hover:dark:bg-slate-700/30 transition-colors">
                             <td class="font-bold text-slate-800 dark:text-slate-200 border-b dark:border-slate-700">
                                 <div class="flex items-center gap-3">
-                                    <div class="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 flex items-center justify-center font-black text-xs uppercase shadow-sm">
-                                        {{ doc.nomStagiaire.charAt(0) }}
+                                    <div class="w-10 h-10 rounded-xl overflow-hidden shadow-sm border border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 flex items-center justify-center">
+                                        <img *ngIf="doc.photoUrl" [src]="doc.photoUrl" class="w-full h-full object-cover" [alt]="doc.nomStagiaire" />
+                                        <div *ngIf="!doc.photoUrl" class="w-full h-full bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 flex items-center justify-center font-black text-xs uppercase">
+                                            {{ doc.nomStagiaire.charAt(0) }}
+                                        </div>
                                     </div>
-                                    <span>{{ doc.nomStagiaire }}</span>
+                                    <div class="flex flex-col">
+                                        <span class="font-bold text-slate-800 dark:text-slate-100">{{ doc.nomStagiaire }}</span>
+                                        <span *ngIf="doc.titreOffre" class="text-[9px] text-slate-400 font-bold uppercase tracking-tight">{{ doc.titreOffre }}</span>
+                                    </div>
                                 </div>
                             </td>
                             <td class="border-b dark:border-slate-700">
@@ -126,7 +132,7 @@ import { DocumentStageService, DocumentStage } from '@/app/services/document-sta
                         </tr>
                     </ng-template>
 
-                    <ng-template #empty>
+                    <ng-template #emptymessage>
                         <tr>
                             <td colspan="6" class="text-center py-16 text-slate-500 dark:text-slate-400 bg-slate-50/50 dark:bg-slate-800/50">
                                 <i class="pi pi-inbox text-5xl mb-4 text-slate-300 dark:text-slate-600 block"></i>
@@ -190,7 +196,7 @@ export class EncadrantDocumentsComponent implements OnInit {
     private documentService = inject(DocumentStageService);
     private messageService = inject(MessageService);
 
-    documents: any;
+    documents = inject(DocumentStageService).getDocuments();
 
     displayGradeDialog = false;
     selectedDoc: DocumentStage | null = null;
@@ -205,7 +211,7 @@ export class EncadrantDocumentsComponent implements OnInit {
     selectedTypeFilter: string | null = null;
 
     ngOnInit() {
-        this.documents = this.documentService.getDocuments();
+        this.documentService.fetchDocumentsEncadrant();
     }
 
     onGlobalFilter(table: Table, event: Event) {
@@ -214,10 +220,15 @@ export class EncadrantDocumentsComponent implements OnInit {
 
     async toggleValidation(doc: DocumentStage) {
         try {
-            await this.documentService.toggleValidation(doc.id);
-            this.messageService.add({ severity: 'success', summary: 'Validation', detail: 'Le statut de sécurité a été mis à jour.' });
+            if (doc.validationEncadrant) {
+                await this.documentService.invaliderDocument(doc.id);
+            } else {
+                await this.documentService.validerDocument(doc.id);
+            }
+            this.messageService.add({ severity: 'success', summary: 'Validation', detail: 'Le statut du document a été mis à jour.' });
+            this.documentService.fetchDocumentsEncadrant(); // Refresh list
         } catch (err) {
-            this.messageService.add({ severity: 'error', summary: 'Erreur', detail: "Échec lors de la modification de validation." });
+            this.messageService.add({ severity: 'error', summary: 'Erreur', detail: "Échec lors de la modification de la validation." });
         }
     }
 
@@ -245,6 +256,7 @@ export class EncadrantDocumentsComponent implements OnInit {
                 detail: 'La note et/ou la remarque ont été mises à jour.' 
             });
             this.displayGradeDialog = false;
+            this.documentService.fetchDocumentsEncadrant(); // Refresh list
         } catch (err) {
             this.messageService.add({ severity: 'error', summary: 'Erreur', detail: "Erreur lors de l'enregistrement." });
         }
@@ -258,9 +270,9 @@ export class EncadrantDocumentsComponent implements OnInit {
 
     mappedDocuments = computed(() => {
         const docs = this.documents() || [];
-        return docs.map((d: any) => ({
+        return docs.map((d: DocumentStage) => ({
             ...d,
-            nomStagiaire: 'Ahmed Ben Salah' // Statique pour le moment
+            nomStagiaire: `${d.firstName || ''} ${d.lastName || ''}`.trim() || d.username || 'Stagiaire'
         }));
     });
 }

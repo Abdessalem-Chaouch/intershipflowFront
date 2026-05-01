@@ -1,8 +1,9 @@
-import { Component } from '@angular/core';
+import { Component, inject, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { RouterModule } from '@angular/router';
+import { RouterModule, Router } from '@angular/router';
 import { MenuItem } from 'primeng/api';
 import { AppMenuitem } from './app.menuitem';
+import { UserService } from '@/app/services/user.service';
 
 @Component({
     selector: 'app-menu',
@@ -18,74 +19,111 @@ import { AppMenuitem } from './app.menuitem';
         }
     </ul> `,
 })
-export class AppMenu {
+export class AppMenu implements OnInit {
+    private userService = inject(UserService);
+    private router = inject(Router);
     model: MenuItem[] = [];
 
     ngOnInit() {
+        const user = this.userService.currentUser();
+        const role = user?.role || 'User';
+
+        if (role === 'User') {
+            this.model = [
+                {
+                    label: 'Compte',
+                    items: [
+                        {
+                            label: 'Mon Profil',
+                            icon: 'pi pi-fw pi-user',
+                            routerLink: ['/landing/profile']
+                        },
+                        {
+                            label: 'Se déconnecter',
+                            icon: 'pi pi-fw pi-sign-out',
+                            command: () => {
+                                this.userService.logout();
+                                this.router.navigate(['/landing']);
+                            }
+                        }
+                    ]
+                }
+            ];
+            return;
+        }
+
+        const hasRole = (roles: string[]) => roles.includes(role);
+
         this.model = [
             {
                 label: 'Home',
                 items: [{ label: 'Dashboard', icon: 'pi pi-fw pi-home', routerLink: ['/'] }]
-            },
-            {
-                label: 'Pages',
-                icon: 'pi pi-fw pi-briefcase',
-                path: '/pages',
-                items: [
-                    {
-                        label: 'Landing',
-                        icon: 'pi pi-fw pi-globe',
-                        routerLink: ['/landing']
-                    },
-                    {
-                        label: 'Gestion Utilisateurs',
-                        icon: 'pi pi-fw pi-users',
-                        routerLink: ['/pages/user-management']
-                    },
-                    {
-                        label: 'Gestion des Offres',
-                        icon: 'pi pi-fw pi-briefcase',
-                        routerLink: ['/pages/offer-management']
-                    },
-                    {
-                        label: 'Candidatures',
-                        icon: 'pi pi-fw pi-paperclip',
-                        routerLink: ['/pages/application-management']
-                    },
-                    {
-                        label: 'Gestion des Tests',
-                        icon: 'pi pi-fw pi-file-edit',
-                        routerLink: ['/pages/test-management']
-                    },
-                    {
-                        label: 'Gestion des Exercices',
-                        icon: 'pi pi-fw pi-list',
-                        routerLink: ['/pages/exercice-management']
-                    },
-                    {
-                        label: 'Gestion des Questions',
-                        icon: 'pi pi-fw pi-question-circle',
-                        routerLink: ['/pages/question-management']
-                    }
-                ]
-            },
-            {
+            }
+        ];
+
+        // Pages Group
+        const pagesItems = [];
+        pagesItems.push({ label: 'Landing', icon: 'pi pi-fw pi-globe', routerLink: ['/landing'] });
+
+        if (hasRole(['Admin', 'RH'])) {
+            pagesItems.push({ label: 'Gestion Utilisateurs', icon: 'pi pi-fw pi-users', routerLink: ['/pages/user-management'] });
+            pagesItems.push({ label: 'Gestion des Offres', icon: 'pi pi-fw pi-briefcase', routerLink: ['/pages/offer-management'] });
+            pagesItems.push({ label: 'Candidatures', icon: 'pi pi-fw pi-paperclip', routerLink: ['/pages/application-management'] });
+        }
+
+        if (hasRole(['Admin', 'RH', 'Encadrant'])) {
+            pagesItems.push({ label: 'Gestion des Tests', icon: 'pi pi-fw pi-file-edit', routerLink: ['/pages/test-management'] });
+            pagesItems.push({ label: 'Gestion des Exercices', icon: 'pi pi-fw pi-list', routerLink: ['/pages/exercice-management'] });
+            pagesItems.push({ label: 'Gestion des Questions', icon: 'pi pi-fw pi-question-circle', routerLink: ['/pages/question-management'] });
+        }
+
+        this.model.push({
+            label: 'Pages',
+            icon: 'pi pi-fw pi-briefcase',
+            items: pagesItems
+        });
+
+        // Suivi des Stages Group
+        const stageItems = [];
+        if (hasRole(['Stagiaire'])) {
+            stageItems.push({ label: 'Mes Stages', icon: 'pi pi-fw pi-list', routerLink: ['/pages/mes-stages'] });
+            stageItems.push({ label: 'Dépôt Stagiaire', icon: 'pi pi-fw pi-cloud-upload', routerLink: ['/pages/stagiaire-documents'] });
+            stageItems.push({ label: 'Mes Attestations', icon: 'pi pi-fw pi-file', routerLink: ['/pages/mes-attestations'] });
+        }
+
+        if (hasRole(['Admin', 'RH', 'Encadrant'])) {
+            stageItems.push({ label: 'Gestion Stages', icon: 'pi pi-fw pi-cog', routerLink: ['/pages/gestion-stages'] });
+        }
+
+        if (hasRole(['Encadrant', 'Admin', 'RH'])) {
+            stageItems.push({ label: 'Évaluation Encadrant', icon: 'pi pi-fw pi-check-square', routerLink: ['/pages/encadrant-documents'] });
+        }
+
+        if (hasRole(['Admin', 'RH'])) {
+            stageItems.push({ label: 'Gestion Attestations', icon: 'pi pi-fw pi-shield', routerLink: ['/pages/gestion-attestations'] });
+        }
+
+        if (stageItems.length > 0) {
+            this.model.push({
                 label: 'Suivi des Stages',
                 icon: 'pi pi-fw pi-folder-open',
-                items: [
-                    {
-                        label: 'Dépôt Stagiaire',
-                        icon: 'pi pi-fw pi-cloud-upload',
-                        routerLink: ['/pages/stagiaire-documents']
-                    },
-                    {
-                        label: 'Évaluation Encadrant',
-                        icon: 'pi pi-fw pi-check-square',
-                        routerLink: ['/pages/encadrant-documents']
-                    }
-                ]
-            }
+                items: stageItems
+            });
+        }
 
-        ];
+        this.model.push({
+            label: 'Compte',
+            items: [
+                { label: 'Mon Profil', icon: 'pi pi-fw pi-user', routerLink: ['/pages/profile'] },
+                {
+                    label: 'Se déconnecter',
+                    icon: 'pi pi-fw pi-sign-out',
+                    command: () => {
+                        this.userService.logout();
+                        this.router.navigate(['/landing']);
+                    }
+                }
+            ]
+        });
     }
 }

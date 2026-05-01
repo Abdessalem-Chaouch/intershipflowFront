@@ -14,6 +14,27 @@ export interface User {
     role?: 'Admin' | 'RH' | 'Encadrant' | 'Stagiaire' | 'User';
     encadrantId?: string;
     stagiaireIds?: string[];
+    photoUrl?: string;
+    cin?: string;
+    phone?: string;
+    address?: string;
+    bio?: string;
+    enabled?: string;
+    // Fields for StagiaireDetailsDTO
+    stageId?: number;
+    titreOffre?: string;
+    etat?: string;
+    encadrantNom?: string;
+    dateDebutStage?: string;
+    dateFinStage?: string;
+    documentsValides?: boolean;
+    candidatureId?: number;
+    offreStageId?: number;
+    affecte?: boolean;
+    // Fields for EncadrantDetailsDTO
+    stagiaires?: any[];
+    stages?: any[];
+    numeroStage?: number;
 }
 
 export interface KeycloakUserDto {
@@ -38,6 +59,7 @@ export interface LoginResponse {
         access_token: string;
         refresh_token: string;
     } | any;
+    role: string;
 }
 
 @Injectable({
@@ -93,15 +115,22 @@ export class UserService {
                         icon: 'pi pi-home',
                         command: () => { this.router.navigate(['/landing']); }
                     },
-                    {
+                    ...(user?.role !== 'User' ? [{
                         label: 'Tableau de bord',
                         icon: 'pi pi-th-large',
                         command: () => { this.router.navigate(['/']); }
-                    },
+                    }] : []),
                     {
                         label: 'Paramètres / Profil',
                         icon: 'pi pi-cog',
-                        command: () => { this.router.navigate(['/pages/profile']); }
+                        command: () => { 
+                            const user = this.currentUser();
+                            if (user?.role === 'User') {
+                                this.router.navigate(['/landing/profile']);
+                            } else {
+                                this.router.navigate(['/pages/profile']);
+                            }
+                        }
                     }
                 ]
             },
@@ -127,18 +156,37 @@ export class UserService {
 
     private initializeAuth() {
         const storedToken = localStorage.getItem('auth_token');
+        const storedUser = localStorage.getItem('user_data');
+        
         if (storedToken) {
             this.token.set(storedToken);
-            const decoded: any = this.decodeToken(storedToken);
-            if (decoded) {
-                this.currentUser.set({
-                    username: decoded.preferred_username || decoded.sub,
-                    email: decoded.email,
-                    firstName: decoded.given_name,
-                    lastName: decoded.family_name,
-                    role: this.mapBackendRole(decoded.realm_access?.roles || [])
-                });
+            
+            if (storedUser) {
+                try {
+                    this.currentUser.set(JSON.parse(storedUser));
+                } catch (e) {
+                    console.error('Error parsing stored user data', e);
+                    this.decodeAndSetUser(storedToken);
+                }
+            } else {
+                this.decodeAndSetUser(storedToken);
             }
+        }
+    }
+
+    private decodeAndSetUser(token: string) {
+        const decoded: any = this.decodeToken(token);
+        if (decoded) {
+            const userObj: User = {
+                id: decoded.sub,
+                username: decoded.preferred_username || decoded.sub,
+                email: decoded.email,
+                firstName: decoded.given_name,
+                lastName: decoded.family_name,
+                role: this.mapBackendRole(decoded.realm_access?.roles || [])
+            };
+            this.currentUser.set(userObj);
+            localStorage.setItem('user_data', JSON.stringify(userObj));
         }
     }
 
@@ -204,20 +252,48 @@ export class UserService {
             };
             mappedRole = roleMap[dto.role.toLowerCase()] || dto.role;
         }
+
+        // Handle case where dto.id is the stage ID and utilisateurId is the user ID
+        const userId = dto.utilisateurId || dto.id || dto.username;
+        const stageId = dto.utilisateurId ? dto.id : (dto.stageId ?? dto.id_stage);
+
         return {
-            id: dto.id || dto.username,
+            id: userId,
             firstName: dto.firstName,
             lastName: dto.lastName,
             email: dto.email,
             username: dto.username,
             role: mappedRole,
             encadrantId: dto.encadrantId,
-            stagiaireIds: dto.stagiaireIds
+            stagiaireIds: dto.stagiaireIds,
+            photoUrl: dto.photoUrl,
+            cin: dto.cin,
+            phone: dto.phone,
+            address: dto.address,
+            bio: dto.bio,
+            enabled: dto.enabled || 'ACTIF',
+            stageId: stageId,
+            titreOffre: dto.titreOffre,
+            etat: dto.etat,
+            encadrantNom: dto.encadrantNom,
+            dateDebutStage: dto.dateDebut ?? dto.dateDebutStage,
+            dateFinStage: dto.dateFin ?? dto.dateFinStage,
+            documentsValides: dto.documentsValides,
+            candidatureId: dto.candidatureId,
+            offreStageId: dto.offreStageId,
+            affecte: dto.affecte,
+            stagiaires: dto.stagiaires,
+            stages: dto.stages,
+            numeroStage: dto.numeroStage
         };
     }
 
     getUsersSignal() {
         return this._users;
+    }
+
+    updateUsersSignal(users: User[]) {
+        this._users.set(users);
     }
 
     async getUsers(): Promise<User[]> {
@@ -277,6 +353,19 @@ export class UserService {
         }
     }
 
+    async toggleUserStatus(userId: string, enabled: boolean) {
+        try {
+            const params = new HttpParams().set('enabled', enabled.toString());
+            await firstValueFrom(
+                this.http.put(`${this.apiUrl}/toggle-status/${userId}`, null, { params, responseType: 'text' })
+            );
+            await this.fetchAllUsers();
+        } catch (err) {
+            console.error('Error toggling user status', err);
+            throw err;
+        }
+    }
+
     async getEncadrants(): Promise<User[]> {
         const dtos = await firstValueFrom(
             this.http.get<KeycloakUserDto[]>(`${this.apiUrl}/encadrants`)
@@ -321,15 +410,17 @@ export class UserService {
 
                 const decoded: any = this.decodeToken(accessToken);
                 const userObj: User = {
+                    id: decoded?.sub,
                     username: response.username || decoded?.preferred_username || decoded?.sub || response.email || request.username,
                     email: response.email || decoded?.email,
                     firstName: response.firstName || decoded?.given_name || 'Utilisateur',
                     lastName: response.lastName || decoded?.family_name || '',
-                    role: this.mapBackendRole(decoded?.realm_access?.roles || [])
+                    role: response.role ? this.mapBackendRole([response.role.toLowerCase()]) : this.mapBackendRole(decoded?.realm_access?.roles || [])
                 };
 
                 console.log('Setting currentUser signal with:', userObj);
                 this.currentUser.set(userObj);
+                localStorage.setItem('user_data', JSON.stringify(userObj));
                 return response;
             } else {
                 console.error('Login failed: Token missing in response structure', response);
@@ -379,6 +470,7 @@ export class UserService {
     private clearLocalSession() {
         localStorage.removeItem('auth_token');
         localStorage.removeItem('refresh_token');
+        localStorage.removeItem('user_data');
         this.token.set(null);
         this.currentUser.set(null);
     }
