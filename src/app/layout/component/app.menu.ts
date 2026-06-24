@@ -57,7 +57,7 @@ export class AppMenu implements OnInit {
         this.model = [
             {
                 label: 'Home',
-                items: [{ label: 'Dashboard', icon: 'pi pi-fw pi-home', routerLink: ['/'] }]
+                items: [{ label: 'Dashboard', icon: 'pi pi-fw pi-home', routerLink: ['/dashboard'] }]
             }
         ];
 
@@ -97,6 +97,10 @@ export class AppMenu implements OnInit {
 
         if (hasRole(['Encadrant', 'Admin', 'RH'])) {
             stageItems.push({ label: 'Évaluation Encadrant', icon: 'pi pi-fw pi-check-square', routerLink: ['/pages/encadrant-documents'] });
+        }
+
+        if (hasRole(['Encadrant'])) {
+            stageItems.push({ label: 'Mes Stagiaires', icon: 'pi pi-fw pi-users', routerLink: ['/pages/mes-stagiaires'] });
         }
 
         if (hasRole(['Admin', 'RH'])) {

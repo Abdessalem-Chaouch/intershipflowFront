@@ -39,7 +39,7 @@ import { StageService, Stage, EtatStage } from '@/app/services/stage.service';
                 <div>
                     <h4 class="text-amber-800 dark:text-amber-300 font-black m-0 text-lg uppercase tracking-tight">Dépôt verrouillé</h4>
                     <p class="text-amber-700/80 dark:text-amber-400/80 text-sm m-0 font-medium leading-relaxed">
-                        Le dépôt de documents sera disponible dès que votre stage passera à l'état <span class="font-bold text-amber-600 dark:text-amber-400 uppercase">En Cours</span>.
+                        Le dépôt de documents sera disponible dès que votre stage passera à l'état <span class="font-bold text-amber-600 dark:text-amber-400 uppercase">En Cours</span> ou <span class="font-bold text-amber-600 dark:text-amber-400 uppercase">En attente de validation</span>.
                         <span *ngIf="monStage()?.etat === 'ACCEPTE'" class="block mt-1">État actuel : <span class="font-bold">Accepté</span> (En attente de démarrage).</span>
                         <span *ngIf="!monStage()" class="block mt-1">Aucun stage actif n'a été détecté pour votre compte.</span>
                     </p>
@@ -126,11 +126,6 @@ import { StageService, Stage, EtatStage } from '@/app/services/stage.service';
                                 </p>
                             </div>
 
-                            <div class="flex items-center gap-2 mb-3">
-                                <button (click)="download(doc)" [disabled]="!doc.alfrescoNodeId" class="flex-1 py-2 px-3 rounded-lg border border-blue-100 dark:border-blue-900/30 text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors flex items-center justify-center gap-2 disabled:opacity-50">
-                                    <i class="pi pi-download"></i> Télécharger
-                                </button>
-                            </div>
 
                             <div class="flex items-center gap-2" *ngIf="!doc.validationEncadrant && isStageEnCours()">
                                 <!-- Bouton Remplacer (utilise fileUpload en mode invisible) -->
@@ -186,12 +181,20 @@ export class StagiaireDocumentsComponent implements OnInit {
     private confirmationService = inject(ConfirmationService);
 
     documents = signal<DocumentStage[]>([]);
-    monStage = signal<Stage | null>(null);
-    isStageEnCours = computed(() => this.monStage()?.etat === EtatStage.EN_COURS);
+    monStage = this.stageService.activeStage;
+    isStageEnCours = computed(() => {
+        const etat = this.monStage()?.etat;
+        return etat === EtatStage.EN_COURS || etat === EtatStage.ATT_VALIDATION_ENCADRANT;
+    });
 
     ngOnInit() {
-        this.loadStage();
-        this.loadMesDocuments();
+        this.initializeData();
+    }
+
+    async initializeData() {
+        await this.loadStage();
+        await this.loadMesDocuments();
+        await this.checkAndUpdateStageState();
     }
 
     async loadStage() {
@@ -212,6 +215,59 @@ export class StagiaireDocumentsComponent implements OnInit {
         }
     }
 
+    async checkAndUpdateStageState() {
+        const stage = this.monStage();
+        if (!stage) {
+            console.log('checkAndUpdateStageState: No active stage found');
+            return;
+        }
+
+        const hasConvention = this.getDoc('CONVENTION') !== undefined;
+        const hasRapport = this.getDoc('RAPPORT') !== undefined;
+        const hasPresentation = this.getDoc('PRESENTATION') !== undefined;
+        const requiredDocsUploaded = [hasConvention, hasRapport, hasPresentation].filter(Boolean).length;
+
+        console.log('checkAndUpdateStageState: requiredDocsUploaded =', requiredDocsUploaded, 'stage.etat =', stage.etat);
+
+        if (requiredDocsUploaded === 3 && stage.etat === EtatStage.EN_COURS) {
+            try {
+                console.log('checkAndUpdateStageState: Attempting to update stage state to ATT_VALIDATION_ENCADRANT');
+                const updatedStage = await this.stageService.updateEtatStage(stage.id, EtatStage.ATT_VALIDATION_ENCADRANT);
+                this.monStage.set(updatedStage);
+                this.messageService.add({
+                    severity: 'info',
+                    summary: 'Statut mis à jour',
+                    detail: 'Votre stage est maintenant en attente de validation par l\'encadrant.'
+                });
+            } catch (err: any) {
+                console.error('Error updating stage state to ATT_VALIDATION_ENCADRANT', err);
+                this.messageService.add({
+                    severity: 'error',
+                    summary: 'Erreur de mise à jour',
+                    detail: 'Impossible de changer l\'état du stage à ATT_VALIDATION_ENCADRANT: ' + (err.message || err)
+                });
+            }
+        } else if (requiredDocsUploaded < 3 && stage.etat === EtatStage.ATT_VALIDATION_ENCADRANT) {
+            try {
+                console.log('checkAndUpdateStageState: Attempting to update stage state to EN_COURS');
+                const updatedStage = await this.stageService.updateEtatStage(stage.id, EtatStage.EN_COURS);
+                this.monStage.set(updatedStage);
+                this.messageService.add({
+                    severity: 'info',
+                    summary: 'Statut mis à jour',
+                    detail: 'Votre stage est repassé en cours suite à la suppression d\'un document.'
+                });
+            } catch (err: any) {
+                console.error('Error updating stage state to EN_COURS', err);
+                this.messageService.add({
+                    severity: 'error',
+                    summary: 'Erreur de mise à jour',
+                    detail: 'Impossible de changer l\'état du stage à EN_COURS: ' + (err.message || err)
+                });
+            }
+        }
+    }
+
     getDoc(type: TypeDocument): DocumentStage | undefined {
         return this.documents()?.find((d: DocumentStage) => d.type === type);
     }
@@ -223,7 +279,8 @@ export class StagiaireDocumentsComponent implements OnInit {
         try {
             await this.documentService.createDocument(type, file);
             this.messageService.add({ severity: 'success', summary: 'Fichier ajouté', detail: 'Le document a été envoyé avec succès.' });
-            this.loadMesDocuments(); // Refresh local list
+            await this.loadMesDocuments(); // Refresh local list
+            await this.checkAndUpdateStageState(); // Check and update stage state
             event.target.value = ''; // Reset input
         } catch (err) {
             this.messageService.add({ severity: 'error', summary: 'Erreur', detail: "Échec de l'envoi du fichier." });
@@ -253,7 +310,8 @@ export class StagiaireDocumentsComponent implements OnInit {
                 try {
                     await this.documentService.deleteDocument(doc.id);
                     this.messageService.add({ severity: 'success', summary: 'Document supprimé', detail: 'Le document a été retiré.' });
-                    this.loadMesDocuments(); // Refresh local list
+                    await this.loadMesDocuments(); // Refresh local list
+                    await this.checkAndUpdateStageState(); // Check and update stage state
                 } catch (err) {
                     this.messageService.add({ severity: 'error', summary: 'Erreur', detail: 'Impossible de supprimer ce document.' });
                 }

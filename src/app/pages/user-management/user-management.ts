@@ -1,4 +1,4 @@
-import { Component, OnInit, signal, ViewChild, inject, ElementRef } from '@angular/core';
+import { Component, OnInit, signal, ViewChild, inject, ElementRef, ChangeDetectorRef, computed, Signal } from '@angular/core';
 import { AvatarModule } from 'primeng/avatar';
 import { TooltipModule } from 'primeng/tooltip';
 import { ToggleSwitchModule } from 'primeng/toggleswitch';
@@ -24,7 +24,7 @@ import { StageService } from '@/app/services/stage.service';
 import { InternshipService } from '@/app/services/internship.service';
 import { DatePickerModule } from 'primeng/datepicker';
 import { LayoutService } from '@/app/layout/service/layout.service';
-import { Signal, computed } from '@angular/core';
+
 
 interface Column {
     field: string;
@@ -109,27 +109,36 @@ interface Intern {
             currentPageReportTemplate="Affichage de {first} à {last} sur {totalRecords} utilisateurs"
             [showCurrentPageReport]="true"
             [rowsPerPageOptions]="[10, 20, 30]"
+            csvSeparator=";"
+            exportFilename="utilisateurs_management"
         >
             <ng-template #caption>
-                <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-6 p-6 bg-gradient-to-r from-slate-50 to-white rounded-t-2xl border-b border-slate-100">
+                <div [ngClass]="layoutService.isDarkTheme() ? 'bg-gradient-to-br from-[#1e293b] to-[#0f172a] border-white/5' : 'bg-gradient-to-r from-slate-50 to-white border-slate-100'"
+                    class="flex flex-col md:flex-row md:items-center md:justify-between gap-6 p-6 rounded-t-2xl border-b transition-colors duration-500">
                     <div>
-                        <h5 class="m-0 text-3xl font-black text-slate-900 tracking-tight flex items-center gap-3">
-                            <span class="w-2.5 h-10 bg-[#063970] rounded-full shadow-sm"></span>
+                        <h5 class="m-0 text-3xl font-black tracking-tight flex items-center gap-3"
+                            [ngClass]="layoutService.isDarkTheme() ? 'text-white' : 'text-slate-900'">
+                            <span class="w-2.5 h-10 bg-[#063970] rounded-full shadow-sm" [class.bg-blue-500]="layoutService.isDarkTheme()"></span>
                             Gestion des Utilisateurs
                         </h5>
-                        <p class="text-slate-500 mt-2 text-sm font-medium">Contrôlez les accès et suivez l'état des stages en temps réel.</p>
+                        <p class="mt-2 text-sm font-medium" [ngClass]="layoutService.isDarkTheme() ? 'text-slate-400' : 'text-slate-500'">
+                            Contrôlez les accès et suivez l'état des stages en temps réel.
+                        </p>
                     </div>
                     
                     <div class="flex flex-wrap items-center gap-4">
                         <div class="relative min-w-[220px]">
-                            <span class="absolute -top-2.5 left-4 px-2 bg-white text-[10px] font-black text-[#063970] z-10 uppercase tracking-[0.15em] border border-slate-100 rounded-md shadow-sm">Filtre Rôle</span>
-                            <p-select [options]="roles" [(ngModel)]="selectedRole" (onChange)="onRoleFilter(dt, $event)" 
+                            <span class="absolute -top-2.5 left-4 px-2 text-[10px] font-black z-10 uppercase tracking-[0.15em] border rounded-md shadow-sm transition-colors"
+                                [ngClass]="layoutService.isDarkTheme() ? 'bg-[#1e293b] text-blue-400 border-white/10' : 'bg-white text-[#063970] border-slate-100'">
+                                Filtre Rôle
+                            </span>
+                            <p-select [options]="currentUser()?.role === 'RH' ? roles.filter(r => r.value !== 'Admin') : roles" [(ngModel)]="selectedRole" (onChange)="onRoleFilter(dt, $event)" 
                                 [showClear]="true" placeholder="Tous les rôles" class="w-full" 
-                                styleClass="w-full rounded-2xl border-slate-200 shadow-sm focus:ring-4 focus:ring-[#063970]/10 transition-all">
+                                [styleClass]="layoutService.isDarkTheme() ? 'w-full rounded-2xl border-white/10 bg-white/5 shadow-sm focus:ring-4 focus:ring-blue-500/20' : 'w-full rounded-2xl border-slate-200 shadow-sm focus:ring-4 focus:ring-[#063970]/10 transition-all'">
                                 <ng-template #item let-option>
                                     <div class="flex items-center gap-3 py-1">
                                         <span class="w-3 h-3 rounded-full shadow-inner" [ngClass]="getRoleColor(option.value)"></span>
-                                        <span class="font-bold text-xs text-slate-700">{{ option.label }}</span>
+                                        <span class="font-bold text-xs" [ngClass]="layoutService.isDarkTheme() ? 'text-slate-200' : 'text-slate-700'">{{ option.label }}</span>
                                     </div>
                                 </ng-template>
                             </p-select>
@@ -137,73 +146,84 @@ interface Intern {
 
                         <div class="min-w-[280px]">
                             <p-iconfield class="w-full">
-                                <p-inputicon styleClass="pi pi-search text-[#063970] font-bold" />
+                                <p-inputicon [styleClass]="layoutService.isDarkTheme() ? 'pi pi-search text-blue-400' : 'pi pi-search text-[#063970] font-bold'" />
                                 <input pInputText type="text" (input)="onGlobalFilter(dt, $event)" placeholder="Rechercher un membre..." 
-                                    class="w-full rounded-2xl border-slate-200 shadow-sm px-12 py-3.5 focus:ring-4 focus:ring-[#063970]/10 transition-all placeholder:text-slate-400 placeholder:font-medium" />
+                                    [ngClass]="layoutService.isDarkTheme() ? 'bg-white/5 border-white/10 text-white placeholder:text-slate-500' : 'bg-white border-slate-200 text-slate-800 placeholder:text-slate-400'"
+                                    class="w-full rounded-2xl shadow-sm px-12 py-3.5 focus:ring-4 focus:ring-[#063970]/10 transition-all placeholder:font-medium" />
                             </p-iconfield>
                         </div>
                     </div>
                 </div>
             </ng-template>
             <ng-template #header>
-                <tr class="bg-slate-50/80">
-                    <th style="width: 4rem" class="pl-6">
+                <tr [ngClass]="layoutService.isDarkTheme() ? 'bg-white/5' : 'bg-slate-50/80'">
+                    <th style="width: 4rem" class="pl-6 transition-colors">
                         <p-tableHeaderCheckbox />
                     </th>
-                    <th pSortableColumn="lastName" style="min-width: 18rem" class="font-black text-slate-500 text-[11px] uppercase tracking-widest py-5">Utilisateur <p-sortIcon field="lastName" /></th>
-                    <th pSortableColumn="email" style="min-width: 14rem" class="font-black text-slate-500 text-[11px] uppercase tracking-widest py-5">Email <p-sortIcon field="email" /></th>
-                    <th pSortableColumn="role" style="min-width: 10rem" class="font-black text-slate-500 text-[11px] uppercase tracking-widest py-5">Rôle <p-sortIcon field="role" /></th>
-                    <th pSortableColumn="enabled" style="width: 10rem" class="text-center font-black text-slate-500 text-[11px] uppercase tracking-widest py-5">Accès <p-sortIcon field="enabled" /></th>
+                    <th pSortableColumn="lastName" style="min-width: 18rem" class="font-black text-[11px] uppercase tracking-widest py-5 transition-colors"
+                        [ngClass]="layoutService.isDarkTheme() ? 'text-slate-400' : 'text-slate-500'">Utilisateur <p-sortIcon field="lastName" /></th>
+                    <th pSortableColumn="email" style="min-width: 14rem" class="font-black text-[11px] uppercase tracking-widest py-5 transition-colors"
+                        [ngClass]="layoutService.isDarkTheme() ? 'text-slate-400' : 'text-slate-500'">Email <p-sortIcon field="email" /></th>
+                    <th pSortableColumn="role" style="min-width: 10rem" class="font-black text-[11px] uppercase tracking-widest py-5 transition-colors"
+                        [ngClass]="layoutService.isDarkTheme() ? 'text-slate-400' : 'text-slate-500'">Rôle <p-sortIcon field="role" /></th>
+                    <th pSortableColumn="enabled" style="width: 10rem" class="text-center font-black text-[11px] uppercase tracking-widest py-5 transition-colors"
+                        [ngClass]="layoutService.isDarkTheme() ? 'text-slate-400' : 'text-slate-500'">Accès <p-sortIcon field="enabled" /></th>
                     
                     <!-- Dynamic Columns -->
-                    <th *ngIf="selectedRole === 'Stagiaire'" style="min-width: 16rem" class="font-black text-slate-500 text-[11px] uppercase tracking-widest py-5">Internship & Status <p-sortIcon field="titreOffre" /></th>
-                    <th *ngIf="selectedRole === 'Encadrant'" style="min-width: 15rem" class="font-black text-slate-500 text-[11px] uppercase tracking-widest py-5">Équipe Management</th>
+                    <th *ngIf="selectedRole === 'Stagiaire'" style="min-width: 16rem" class="font-black text-[11px] uppercase tracking-widest py-5 transition-colors"
+                        [ngClass]="layoutService.isDarkTheme() ? 'text-slate-400' : 'text-slate-500'">Internship & Status <p-sortIcon field="titreOffre" /></th>
+                    <th *ngIf="selectedRole === 'Encadrant'" style="min-width: 15rem" class="font-black text-[11px] uppercase tracking-widest py-5 transition-colors"
+                        [ngClass]="layoutService.isDarkTheme() ? 'text-slate-400' : 'text-slate-500'">Équipe Management</th>
 
-                    <th style="width: 10rem" class="pr-6 text-center font-black text-slate-500 text-[11px] uppercase tracking-widest py-5">Actions</th>
+                    <th style="width: 10rem" class="pr-6 text-center font-black text-[11px] uppercase tracking-widest py-5 transition-colors"
+                        [ngClass]="layoutService.isDarkTheme() ? 'text-slate-400' : 'text-slate-500'">Actions</th>
                 </tr>
             </ng-template>
             <ng-template #body let-user>
-                <tr class="hover:bg-blue-50/30 transition-colors border-b border-slate-100">
+                <tr class="transition-colors border-b" 
+                    [ngClass]="layoutService.isDarkTheme() ? 'hover:bg-white/5 border-white/5' : 'hover:bg-blue-50/30 border-slate-100'">
                     <td style="width: 4rem">
-                        <p-tableCheckbox [value]="user" />
+                        <p-tableCheckbox [value]="user" [disabled]="!canManage(user)" />
                     </td>
                     <td>
                         <div class="flex items-center gap-4 py-2">
                             <div class="relative">
                                 <p-avatar [image]="user.photoUrl || 'assets/layout/images/avatar.png'" shape="circle" size="xlarge" 
-                                    styleClass="shadow-sm border-2 border-white ring-2 ring-slate-100" *ngIf="user.photoUrl" />
+                                    [styleClass]="layoutService.isDarkTheme() ? 'shadow-sm border-2 border-slate-800 ring-2 ring-white/10' : 'shadow-sm border-2 border-white ring-2 ring-slate-100'" *ngIf="user.photoUrl" />
                                 <p-avatar [label]="((user.firstName?.charAt(0) || '') + (user.lastName?.charAt(0) || '')).toUpperCase()" shape="circle" size="xlarge" 
-                                    [style]="{ 'background-color': '#eff6ff', color: '#1e40af' }" 
-                                    styleClass="shadow-sm border-2 border-white ring-2 ring-slate-100 font-bold" *ngIf="!user.photoUrl" />
-                                <span class="absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full border-2 border-white shadow-sm" 
-                                    [ngClass]="user.enabled === 'ACTIF' ? 'bg-green-500' : 'bg-slate-300'"></span>
+                                    [style]="layoutService.isDarkTheme() ? { 'background-color': '#1e293b', color: '#60a5fa' } : { 'background-color': '#eff6ff', color: '#1e40af' }" 
+                                    [styleClass]="layoutService.isDarkTheme() ? 'shadow-sm border-2 border-slate-800 ring-2 ring-white/10 font-bold' : 'shadow-sm border-2 border-white ring-2 ring-slate-100 font-bold'" *ngIf="!user.photoUrl" />
+                                <span class="absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full border-2 shadow-sm" 
+                                    [ngClass]="[user.enabled === 'ACTIF' ? 'bg-green-500' : 'bg-slate-300', layoutService.isDarkTheme() ? 'border-slate-900' : 'border-white']"></span>
                             </div>
                             <div class="flex flex-col gap-0.5">
-                                <span class="font-bold text-slate-800 text-base leading-tight">{{ user.firstName }} {{ user.lastName }}</span>
+                                <span class="font-bold text-base leading-tight" [ngClass]="layoutService.isDarkTheme() ? 'text-white' : 'text-slate-800'">{{ user.firstName }} {{ user.lastName }}</span>
                                 <div class="flex items-center gap-2">
-                                    <span class="text-[10px] bg-slate-100 px-1.5 py-0.5 rounded font-bold text-slate-500 uppercase tracking-tight">CIN: {{ user.cin || 'N/A' }}</span>
-                                    <span class="text-[10px] text-slate-400 font-medium">&#64;{{ user.username }}</span>
+                                    <span class="text-[10px] px-1.5 py-0.5 rounded font-bold uppercase tracking-tight transition-colors"
+                                        [ngClass]="layoutService.isDarkTheme() ? 'bg-white/10 text-slate-400' : 'bg-slate-100 text-slate-500'">CIN: {{ user.cin || 'N/A' }}</span>
+                                    <span class="text-[10px] font-medium transition-colors" [ngClass]="layoutService.isDarkTheme() ? 'text-slate-500' : 'text-slate-400'">&#64;{{ user.username }}</span>
                                 </div>
                             </div>
                         </div>
                     </td>
                     <td>
-                        <span class="text-slate-600 font-medium text-sm flex items-center gap-2">
-                            <i class="pi pi-envelope text-slate-300"></i>
+                        <span class="font-medium text-sm flex items-center gap-2 transition-colors"
+                            [ngClass]="layoutService.isDarkTheme() ? 'text-slate-400' : 'text-slate-600'">
+                            <i class="pi pi-envelope opacity-50"></i>
                             {{ user.email }}
                         </span>
                     </td>
                     <td>
-                        <p-tag [value]="user.role" [severity]="getSeverity(user.role)" styleClass="font-bold px-3 py-1 rounded-lg" />
+                        <p-tag [value]="user.role" [severity]="getSeverity(user.role)" styleClass="font-bold px-3 py-1 rounded-lg shadow-sm" />
                     </td>
                     <td class="text-center">
                         <div class="flex items-center justify-center gap-3">
-                            <span class="text-[9px] font-black uppercase tracking-widest min-w-[70px] text-right"
-                                [ngClass]="user.enabled === 'ACTIF' ? 'text-[#063970]' : 'text-slate-400'">
+                            <span class="text-[9px] font-black uppercase tracking-widest min-w-[70px] text-right transition-colors"
+                                [ngClass]="[user.enabled === 'ACTIF' ? (layoutService.isDarkTheme() ? 'text-blue-400' : 'text-[#063970]') : 'text-slate-400']">
                                 {{ user.enabled === 'ACTIF' ? 'Activé' : 'Désactivé' }}
                             </span>
                             <p-toggleswitch [ngModel]="user.enabled === 'ACTIF'" (onChange)="toggleStatus(user, $event.checked)" 
-                                pTooltip="Changer le statut du compte" tooltipPosition="top" />
+                                pTooltip="Changer le statut du compte" tooltipPosition="top" [disabled]="!canManage(user)" />
                         </div>
                     </td>
 
@@ -211,22 +231,24 @@ interface Intern {
                         <div class="flex flex-col gap-2">
                             <!-- Info Card: Visible if stage ID or status exists -->
                             <div *ngIf="user.stageId || user.etat || user.titreOffre" 
-                                class="flex items-center bg-slate-50/50 p-2 rounded-xl border border-slate-100 group hover:border-[#063970]/30 transition-all overflow-hidden relative">
+                                [ngClass]="layoutService.isDarkTheme() ? 'bg-white/5 border-white/10 hover:border-blue-500/50' : 'bg-slate-50/50 border-slate-100 hover:border-[#063970]/30'"
+                                class="flex items-center p-2 rounded-xl border group transition-all overflow-hidden relative">
                                 
                                 <div class="flex flex-col truncate pl-3 py-1 flex-1">
                                     <span class="text-[9px] font-black uppercase tracking-widest mb-0.5"
                                         [ngClass]="{
-                                            'text-blue-500': user.etat === 'ACCEPTE',
-                                            'text-emerald-500': user.etat === 'VALIDE' || user.etat === 'EN_COURS',
-                                            'text-amber-500': user.etat?.includes('ATTENTE'),
-                                            'text-red-500': user.etat === 'REFUSE' || user.etat === 'NON_VALIDE',
-                                            'text-slate-400': !user.etat
+                                            'text-blue-500': user.etat === 'EN_COURS',
+                                            'text-slate-400': user.etat === 'ACCEPTE',
+                                            'text-emerald-500': user.etat === 'VALIDE',
+                                            'text-red-500': user.etat === 'NON_VALIDE' || user.etat === 'REFUSE',
+                                            'text-amber-500': user.etat?.includes('ATTENTE')
                                         }">  
                                         {{ user.etat || 'CANDIDATURE' }}
                                         <span *ngIf="user.numeroStage" class="ml-1 opacity-50">#{{ user.numeroStage }}</span>
                                     </span>
 
-                                    <span class="font-bold text-slate-700 text-xs truncate max-w-[130px]" 
+                                    <span class="font-bold text-xs truncate max-w-[130px] transition-colors" 
+                                        [ngClass]="layoutService.isDarkTheme() ? 'text-slate-200' : 'text-slate-700'"
                                         [pTooltip]="user.titreOffre || 'N/A'">
                                         {{ user.titreOffre || 'N/A' }}
                                     </span>
@@ -248,7 +270,7 @@ interface Intern {
                                         [text]="true"
                                         [rounded]="true"
                                         size="small"
-                                        styleClass="w-8 h-8 p-0 m-0 flex items-center justify-center text-slate-400 hover:text-[#063970]"
+                                        [styleClass]="layoutService.isDarkTheme() ? 'w-8 h-8 p-0 m-0 flex items-center justify-center text-slate-500 hover:text-blue-400 hover:bg-white/5' : 'w-8 h-8 p-0 m-0 flex items-center justify-center text-slate-400 hover:text-[#063970]'"
                                         pTooltip="Historique & Détails"
                                         (onClick)="viewStageDetails(user)" />
                                 </div>
@@ -260,9 +282,7 @@ interface Intern {
                                     label="Initialiser Stage" 
                                     icon="pi pi-plus-circle" 
                                     [text]="true" 
-                                    styleClass="text-[11px] font-black px-5 py-2.5 rounded-2xl transition-all border-none
-                                                bg-[#063970]/10 text-[#063970] 
-                                                hover:bg-[#063970] hover:text-white hover:shadow-lg hover:shadow-[#063970]/20 active:scale-95"
+                                    [styleClass]="layoutService.isDarkTheme() ? 'text-[11px] font-black px-5 py-2.5 rounded-2xl transition-all border-none bg-blue-500/10 text-blue-400 hover:bg-blue-500 hover:text-white hover:shadow-lg hover:shadow-blue-500/20 active:scale-95' : 'text-[11px] font-black px-5 py-2.5 rounded-2xl transition-all border-none bg-[#063970]/10 text-[#063970] hover:bg-[#063970] hover:text-white hover:shadow-lg hover:shadow-[#063970]/20 active:scale-95'"
                                     (onClick)="openCreateStage(user)" 
                                 />
                             </div>
@@ -271,22 +291,22 @@ interface Intern {
 
                     <td *ngIf="selectedRole === 'Encadrant'">
                         <p-button label="Voir Management" icon="pi pi-chart-bar" [text]="true" size="small" 
-                            styleClass="text-xs font-bold text-indigo-600 hover:bg-indigo-50 px-4 py-2 border border-indigo-100 rounded-xl shadow-sm" 
+                            [styleClass]="layoutService.isDarkTheme() ? 'text-xs font-bold text-blue-400 hover:bg-white/5 px-4 py-2 border border-white/10 rounded-xl shadow-sm' : 'text-xs font-bold text-indigo-600 hover:bg-indigo-50 px-4 py-2 border border-indigo-100 rounded-xl shadow-sm'" 
                             (onClick)="viewInterns(user)" />
                     </td>
 
                     <td class="text-center">
                         <div class="flex items-center justify-center gap-1">
                             <p-button icon="pi pi-eye" [rounded]="true" [text]="true" severity="info" (click)="viewUserDetails(user)" pTooltip="Détails" />
-                            <p-button icon="pi pi-pencil" [rounded]="true" [text]="true" severity="warn" (click)="editUser(user)" pTooltip="Modifier" />
-                            <p-button icon="pi pi-trash" [rounded]="true" [text]="true" severity="danger" (click)="deleteUser(user)" pTooltip="Supprimer" />
+                            <p-button *ngIf="canManage(user)" icon="pi pi-pencil" [rounded]="true" [text]="true" severity="warn" (click)="editUser(user)" pTooltip="Modifier" />
+                            <p-button *ngIf="canManage(user)" icon="pi pi-trash" [rounded]="true" [text]="true" severity="danger" (click)="deleteUser(user)" pTooltip="Supprimer" />
                         </div>
                     </td>
                 </tr>
             </ng-template>
         </p-table>
 
-        <p-dialog [(visible)]="userDialog" [style]="{ width: '500px' }" header="Détails de l'utilisateur" [modal]="true" class="p-fluid" [contentStyle]="{ 'max-height': '500px', 'overflow-y': 'auto' }">
+        <p-dialog [(visible)]="userDialog" [style]="{ width: '500px' }" header="Détails de l'utilisateur" [modal]="true" class="p-fluid" [contentStyle]="{ 'max-height': '500px', 'overflow-y': 'auto' }" appendTo="body">
             <ng-template #content>
                 <div class="flex flex-col gap-4">
                     <div class="flex gap-4">
@@ -322,7 +342,7 @@ interface Intern {
 
                     <div>
                         <label for="role" class="block font-bold mb-2">Rôle</label>
-                        <p-select [(ngModel)]="user.role" inputId="role" [options]="roles" placeholder="Sélectionner un rôle" [fluid]="true" appendTo="body" />
+                        <p-select [(ngModel)]="user.role" inputId="role" [options]="availableRoles" placeholder="Sélectionner un rôle" [fluid]="true" appendTo="body" />
                         <small class="text-red-500" *ngIf="submitted && !user.role">Le rôle est requis.</small>
                     </div>
                 </div>
@@ -337,41 +357,51 @@ interface Intern {
         <!-- Managed Interns and Stages Dialog -->
         <p-dialog [(visible)]="managedInternsDialog" [style]="{ width: '650px' }" [header]="selectedSupervisor ? 'Management de ' + selectedSupervisor.firstName + ' ' + selectedSupervisor.lastName : 'Détails Management'" [modal]="true">
             <div class="flex flex-col gap-6 py-2">
-                <!-- Interns Section -->
-                <div>
-                    <h6 class="text-lg font-bold text-slate-800 mb-3 flex items-center gap-2">
-                        <i class="pi pi-users text-blue-600"></i> Stagiaires Affectés ({{ selectedSupervisor?.stagiaires?.length || 0 }})
-                    </h6>
-                    <div *ngIf="selectedSupervisor?.stagiaires && selectedSupervisor!.stagiaires!.length > 0; else noInterns" class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        <div *ngFor="let intern of selectedSupervisor!.stagiaires" class="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
-                            <p-avatar [label]="intern.firstName?.charAt(0)" shape="circle" styleClass="bg-blue-100 text-blue-700 font-bold" />
-                            <div class="flex flex-col">
-                                <span class="font-bold text-slate-800 text-sm">{{ intern.firstName }} {{ intern.lastName }}</span>
-                                <span class="text-[10px] text-slate-500 uppercase font-semibold">{{ intern.titreOffre }}</span>
-                            </div>
-                        </div>
-                    </div>
-                    <ng-template #noInterns>
-                        <div class="p-4 text-center text-slate-400 italic bg-slate-50 rounded-lg">Aucun stagiaire affecté.</div>
-                    </ng-template>
-                </div>
-
                 <!-- Stages Section -->
                 <div>
-                    <h6 class="text-lg font-bold text-slate-800 mb-3 flex items-center gap-2">
-                        <i class="pi pi-briefcase text-orange-600"></i> Liste des Stages ({{ selectedSupervisor?.stages?.length || 0 }})
+                    <h6 class="text-xl font-black text-[#063970] mb-4 flex items-center gap-3">
+                        <i class="pi pi-briefcase text-2xl"></i>
+                        <span>Liste des Stages Sous Management </span>
                     </h6>
-                    <div *ngIf="selectedSupervisor?.stages && selectedSupervisor!.stages!.length > 0; else noStages" class="flex flex-col gap-2">
-                        <div *ngFor="let stage of selectedSupervisor!.stages" class="flex items-center justify-between p-3 bg-orange-50 rounded-xl border border-orange-100">
-                            <div class="flex flex-col">
-                                <span class="font-bold text-slate-800 text-sm">{{ stage.titreOffre }}</span>
-                                <span class="text-[10px] text-slate-500">Du {{ stage.dateDebut | date:'dd/MM/yyyy' }} au {{ stage.dateFin | date:'dd/MM/yyyy' }}</span>
+                    
+                    <div *ngIf="selectedSupervisor?.stages && selectedSupervisor!.stages!.length > 0; else noStages" class="flex flex-col gap-3">
+                        <div *ngFor="let stage of selectedSupervisor!.stages" 
+                             class="flex items-center justify-between p-4 bg-white dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm hover:shadow-md transition-all group">
+                            
+                            <div class="flex items-center gap-4">
+                                <div class="w-12 h-12 rounded-xl bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center text-blue-600 dark:text-blue-400 group-hover:scale-110 transition-transform">
+                                    <i class="pi pi-user-edit text-xl"></i>
+                                </div>
+                                <div class="flex flex-col">
+                                    <div class="flex flex-col mb-1">
+                                        <div class="flex items-center gap-2">
+                                            <span class="font-black text-slate-800 dark:text-slate-100 text-sm">{{ stage.firstName }} {{ stage.lastName }}</span>
+                                            <span class="text-[9px] font-bold text-[#063970] bg-[#063970]/5 px-1.5 py-0.5 rounded-md tracking-tighter">&#64;{{ stage.username }}</span>
+                                        </div>
+                                        <div class="flex items-center gap-1.5 mt-0.5">
+                                            <span class="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Stagiaire</span>
+                                        </div>
+                                    </div>
+                                    <span class="font-bold text-[#063970] dark:text-blue-300 text-xs">{{ stage.titreOffre }}</span>
+                                    <div class="flex items-center gap-2 text-[10px] text-slate-400 mt-1 font-medium">
+                                        <i class="pi pi-calendar text-[9px]"></i>
+                                        <span>{{ stage.dateDebut | date:'dd MMM yyyy' }} - {{ stage.dateFin | date:'dd MMM yyyy' }}</span>
+                                    </div>
+                                </div>
                             </div>
-                            <p-tag [value]="stage.etat" [severity]="getEtatSeverity(stage.etat)" styleClass="text-[10px]" />
+
+                            <div class="flex flex-col items-end gap-2">
+                                <p-tag [value]="stage.etat" [severity]="getEtatSeverity(stage.etat)" 
+                                       styleClass="text-[9px] font-black uppercase px-2.5 py-1 rounded-lg" />
+                        
+                            </div>
                         </div>
                     </div>
                     <ng-template #noStages>
-                        <div class="p-4 text-center text-slate-400 italic bg-slate-50 rounded-lg">Aucun stage répertorié.</div>
+                        <div class="p-12 text-center bg-slate-50 dark:bg-slate-900/50 rounded-[2rem] border border-dashed border-slate-200 dark:border-slate-800">
+                            <i class="pi pi-folder-open text-5xl text-slate-200 dark:text-slate-700 mb-4 block"></i>
+                            <p class="text-slate-400 font-medium italic m-0">Aucun stage répertorié sous cet encadrement.</p>
+                        </div>
                     </ng-template>
                 </div>
             </div>
@@ -485,7 +515,7 @@ interface Intern {
                         </div>
 
                         <!-- Small Edit Button -->
-                        <div class="mt-6 flex justify-center w-full">
+                        <div class="mt-6 flex justify-center w-full" *ngIf="canManage(selectedUserDetails)">
                             <p-button label="Modifier" icon="pi pi-user-edit" 
                                 styleClass="bg-[#063970] border-none px-8 py-2.5 rounded-xl shadow-lg text-xs font-bold transition-transform hover:scale-105 active:scale-95" 
                                 (click)="editFromDetails()" />
@@ -621,19 +651,19 @@ interface Intern {
                                             <i class="pi pi-users text-[#063970]"></i>
                                             <span class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Encadrement Académique</span>
                                         </div>
-                                        <p-button *ngIf="currentStage.encadrantNom || currentStage.encadrantId" 
+                                        <p-button *ngIf="currentStage.encadrantNom || currentStage.encadrantId || $any(currentStage).encadrantFirstName" 
                                             icon="pi pi-trash" severity="danger" [text]="true" size="small" 
                                             label="Désaffecter" styleClass="text-[10px] font-black hover:bg-red-50" (onClick)="detachSupervisorFromDetails()" />
                                     </div>
 
-                                    <div *ngIf="currentStage.encadrantNom || currentStage.encadrantId; else noEnc" 
+                                    <div *ngIf="currentStage.encadrantNom || currentStage.encadrantId || $any(currentStage).encadrantFirstName; else noEnc" 
                                         class="p-4 bg-white rounded-2xl border border-blue-100 shadow-sm flex items-center justify-between animate-fadein">
                                         <div class="flex items-center gap-4">
                                             <p-avatar [label]="(currentStage.encadrantNom || 'E').charAt(0).toUpperCase()" shape="circle" 
                                                 styleClass="bg-blue-600 text-white font-bold ring-4 ring-blue-50" />
                                             <div class="flex flex-col">
                                                 <span class="text-sm font-black text-slate-800 leading-none mb-1">
-                                                    {{ currentStage.encadrantNom || getSupervisorName(currentStage.encadrantId) }}
+                                                    {{ ($any(currentStage).encadrantFirstName || $any(currentStage).encadrantLastName) ? (($any(currentStage).encadrantFirstName || '') + ' ' + ($any(currentStage).encadrantLastName || '')).trim() : (currentStage.encadrantNom || getSupervisorName(currentStage.encadrantId, currentStage)) }}
                                                 </span>
                                                 <span class="text-[10px] font-bold text-blue-400 uppercase tracking-widest">Encadrant Assigné</span>
                                             </div>
@@ -876,9 +906,19 @@ export class UserManagement implements OnInit {
     offers = this.internshipService.getOffers();
     private messageService = inject(MessageService);
     private confirmationService = inject(ConfirmationService);
+    private cdr = inject(ChangeDetectorRef);
+
+    currentUser = this.userService.currentUser;
 
     constructor() {
-        this.users = this.userService.getUsersSignal();
+        this.users = computed(() => {
+            const allUsers = this.userService.getUsersSignal()();
+            const role = this.currentUser()?.role;
+            if (role === 'RH') {
+                return allUsers.filter(u => u.role !== 'Admin');
+            }
+            return allUsers;
+        });
     }
 
     ngOnInit() {
@@ -897,8 +937,35 @@ export class UserManagement implements OnInit {
             { field: 'firstName', header: 'Prénom' },
             { field: 'email', header: 'Email' },
             { field: 'username', header: 'Utilisateur' },
-            { field: 'role', header: 'Rôle' }
+            { field: 'role', header: 'Rôle' },
+            { field: 'cin', header: 'CIN' },
+            { field: 'phone', header: 'Téléphone' },
+            { field: 'address', header: 'Adresse' },
+            { field: 'enabled', header: 'Statut Compte' },
+            { field: 'titreOffre', header: 'Titre Stage' },
+            { field: 'etat', header: 'État Stage' },
+            { field: 'numeroStage', header: 'N° Stage' },
+            { field: 'encadrantNom', header: 'Encadrant' }
         ];
+    }
+
+    get availableRoles() {
+        const role = this.currentUser()?.role;
+        if (role === 'RH') {
+            return this.roles.filter(r => r.value !== 'Admin' && r.value !== 'RH');
+        }
+        return this.roles;
+    }
+
+    canManage(user: User): boolean {
+        const currentRole = this.currentUser()?.role;
+        if (!currentRole) return false;
+        if (currentRole === 'Admin') return true;
+        if (currentRole === 'RH') {
+            // RH cannot manage Admins or other RHs
+            return user.role !== 'Admin' && user.role !== 'RH';
+        }
+        return false;
     }
 
     onGlobalFilter(table: Table, event: Event) {
@@ -909,10 +976,21 @@ export class UserManagement implements OnInit {
         table.filter(event.value, 'role', 'equals');
     }
 
-    getSupervisorName(id: string | undefined): string {
+    getSupervisorName(id: string | undefined, stage?: any): string {
+        if (stage?.encadrantFirstName || stage?.encadrantLastName) {
+            return `${stage.encadrantFirstName ?? ''} ${stage.encadrantLastName ?? ''}`.trim();
+        }
         if (!id) return 'N/A';
-        const superv = this.users().find(u => u.id === id);
-        return superv ? `${superv.firstName} ${superv.lastName}` : 'N/A';
+        const users = this.users();
+        const superv = users.find(u =>
+            u.id?.toString().toLowerCase() === id.toString().toLowerCase() ||
+            u.username?.toLowerCase() === id.toLowerCase()
+        );
+        if (superv) {
+            const name = `${superv.firstName || ''} ${superv.lastName || ''}`.trim();
+            return name || superv.username || 'N/A';
+        }
+        return 'N/A';
     }
 
     getInternCount(id: string | undefined): number {
@@ -957,8 +1035,12 @@ export class UserManagement implements OnInit {
                 try {
                     await this.affectationService.desaffecter(stageId);
                     this.messageService.add({ severity: 'success', summary: 'Succès', detail: 'Encadrant désaffecté' });
-                    if (currentStage) currentStage.encadrantNom = undefined;
+                    if (currentStage) {
+                        currentStage.encadrantNom = undefined;
+                        currentStage.encadrantId = undefined;
+                    }
                     this.selectedStageUser!.encadrantNom = undefined;
+                    this.selectedStageUser!.encadrantId = undefined;
                     this.showSupervisorSelect = false;
                 } catch (err) {
                     this.messageService.add({ severity: 'error', summary: 'Erreur', detail: 'Échec de la désaffectation' });
@@ -974,24 +1056,34 @@ export class UserManagement implements OnInit {
         if (!this.selectedStageUser || !stageId || !this.selectedSupervisorId) return;
 
         try {
-            await this.affectationService.affecter({
-                stageId: stageId,
-                encadrantId: this.selectedSupervisorId
-            });
+            const hasEncadrant = currentStage?.encadrantId || this.selectedStageUser.encadrantId || currentStage?.encadrantNom || this.selectedStageUser.encadrantNom;
 
-            this.messageService.add({ severity: 'success', summary: 'Succès', detail: 'Encadrant affecté avec succès' });
-            
+            if (hasEncadrant) {
+                await this.affectationService.updateAffectation(stageId, this.selectedSupervisorId);
+                this.messageService.add({ severity: 'success', summary: 'Succès', detail: 'Encadrant mis à jour avec succès' });
+            } else {
+                await this.affectationService.affecter({
+                    stageId: stageId,
+                    encadrantId: this.selectedSupervisorId
+                });
+                this.messageService.add({ severity: 'success', summary: 'Succès', detail: 'Encadrant affecté avec succès' });
+            }
+
             // Refresh local data
             const enc = await this.affectationService.getEncadrant(this.selectedStageUser.id!);
             if (enc) {
-                if (currentStage) currentStage.encadrantNom = enc.encadrantNom;
+                if (currentStage) {
+                    currentStage.encadrantNom = enc.encadrantNom;
+                    currentStage.encadrantId = enc.encadrantId;
+                }
                 this.selectedStageUser.encadrantNom = enc.encadrantNom;
+                this.selectedStageUser.encadrantId = enc.encadrantId;
             }
             
             this.showSupervisorSelect = false;
             this.selectedSupervisorId = null;
         } catch (err) {
-            this.messageService.add({ severity: 'error', summary: 'Erreur', detail: "Échec de l'affectation" });
+            this.messageService.add({ severity: 'error', summary: 'Erreur', detail: "Échec de l'opération d'affectation" });
         }
     }
 
@@ -1130,9 +1222,8 @@ export class UserManagement implements OnInit {
     openNew() {
         this.user = {};
         this.submitted = false;
-        setTimeout(() => {
-            this.userDialog = true;
-        });
+        this.userDialog = true;
+        this.cdr.detectChanges();
     }
 
     viewUserDetails(user: User) {
@@ -1146,15 +1237,15 @@ export class UserManagement implements OnInit {
             this.oldUsername = this.user.username || null;
             this.userDetailsDialog = false;
             this.userDialog = true;
+            this.cdr.detectChanges();
         }
     }
 
     editUser(user: User) {
         this.user = { ...user };
         this.oldUsername = user.username || null;
-        setTimeout(() => {
-            this.userDialog = true;
-        });
+        this.userDialog = true;
+        this.cdr.detectChanges();
     }
 
     async loadUsers() {
@@ -1278,6 +1369,13 @@ export class UserManagement implements OnInit {
         this.submitted = true;
 
         const isNewUser = !this.user.id;
+        
+        // Final security check for RH
+        if (this.currentUser()?.role === 'RH' && (this.user.role === 'Admin' || this.user.role === 'RH')) {
+            this.messageService.add({ severity: 'error', summary: 'Accès refusé', detail: 'Vous n\'avez pas les permissions pour créer/modifier ce rôle.' });
+            return;
+        }
+
         const hasPasswordIfNew = isNewUser ? (this.user.password && this.user.password.trim().length > 0) : true;
 
         if (this.user.firstName?.trim() && this.user.lastName?.trim() && this.user.email?.trim() && this.user.username?.trim() && this.user.role && hasPasswordIfNew) {
@@ -1353,15 +1451,17 @@ export class UserManagement implements OnInit {
 
     getEtatSeverity(etat: string) {
         switch (etat) {
-            case 'EN_ATTENTE':
-                return 'warn';
-            case 'VALIDE':
-            case 'ACCEPTE':
-                return 'success';
-            case 'REFUSE':
-                return 'danger';
             case 'EN_COURS':
                 return 'info';
+            case 'ACCEPTE':
+                return 'secondary';
+            case 'VALIDE':
+                return 'success';
+            case 'NON_VALIDE':
+            case 'REFUSE':
+                return 'danger';
+            case 'EN_ATTENTE':
+                return 'warn';
             default:
                 return 'secondary';
         }

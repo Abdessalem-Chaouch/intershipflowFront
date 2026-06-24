@@ -8,17 +8,18 @@ import { InternshipList } from './app/pages/internship-list/internship-list';
 import { authGuard } from './app/services/auth.guard';
 
 export const appRoutes: Routes = [
+    { path: '', redirectTo: 'landing', pathMatch: 'full' },
+    { path: 'landing', component: Landing },
     {
         path: '',
         component: AppLayout,
         canActivate: [authGuard],
         data: { roles: ['Admin', 'RH', 'Encadrant', 'Stagiaire'] },
         children: [
-            { path: '', component: Dashboard },
+            { path: 'dashboard', component: Dashboard },
             { path: 'pages', loadChildren: () => import('./app/pages/pages.routes') }
         ]
     },
-    { path: 'landing', component: Landing },
     { path: 'landing/profile', component: LandingProfile, canActivate: [authGuard] },
     { path: 'internship-list', component: InternshipList },
 

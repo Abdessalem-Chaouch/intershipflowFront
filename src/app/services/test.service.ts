@@ -1,6 +1,8 @@
 import { Injectable, signal, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
+import { ExerciceService } from './exercice.service';
+import { QuestionService } from './question.service';
 
 export interface TechnicalTest {
     id: string;
@@ -32,6 +34,8 @@ export interface TestRequestDTO {
 })
 export class TestService {
     private http = inject(HttpClient);
+    private exerciceService = inject(ExerciceService);
+    private questionService = inject(QuestionService);
     private apiUrl = 'http://localhost:8081/api/tests';
     private tests = signal<TechnicalTest[]>([]);
 
@@ -108,6 +112,8 @@ export class TestService {
             const saved = await firstValueFrom(this.http.post<TestResponseDTO>(`${this.apiUrl}/generate-from-offre/${offreId}`, null));
             const mapped = this.mapToTechnicalTest(saved);
             this.tests.update((tests) => [mapped, ...tests]);
+            this.exerciceService.fetchExercices();
+            this.questionService.fetchQuestions();
             return mapped;
         } catch (err) {
             console.error('Error generating test from offre', err);

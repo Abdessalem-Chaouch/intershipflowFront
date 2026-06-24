@@ -1,6 +1,7 @@
 import { Injectable, signal, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
+import { UserService } from './user.service';
 
 export interface InternshipApplication {
     id: string;
@@ -12,7 +13,7 @@ export interface InternshipApplication {
     cvNodeId?: string;
     letterName: string;
     lettreNodeId?: string;
-    status: 'EN_ATTENTE' | 'ACCEPTEE' | 'REFUSEE';
+    status: 'EN_ATTENTE' | 'ACCEPTEE' | 'REFUSEE' | 'FINI';
     date: Date;
     iaScore?: number;
     iaApproved?: boolean;
@@ -40,6 +41,7 @@ export interface InternshipOffer {
     selectedTestId?: string;
     candidateCount?: number;
     dureeStage?: number;
+    statut?: string;
 }
 
 export interface OffreStageDTO {
@@ -56,6 +58,7 @@ export interface OffreStageDTO {
     selectedTestId?: number;
     selectedTestTitre?: string;
     dureeStage?: number;
+    statut?: string;
 }
 
 @Injectable({
@@ -63,6 +66,7 @@ export interface OffreStageDTO {
 })
 export class InternshipService {
     private http = inject(HttpClient);
+    private userService = inject(UserService);
     private apiUrl = 'http://localhost:8081/api/offres';
     private applications = signal<InternshipApplication[]>([]);
     private offers = signal<InternshipOffer[]>([]);
@@ -83,6 +87,10 @@ export class InternshipService {
     }
 
     fetchApplications() {
+        if (!this.userService.currentUser()) {
+            this.applications.set([]);
+            return;
+        }
         this.http.get<any[]>('http://localhost:8081/candidatures/candidaturesPostuler').subscribe({
             next: (data) => {
                 const mappedApps = data.map(dto => ({
@@ -94,9 +102,10 @@ export class InternshipService {
                     cvName: dto.cvName,
                     letterName: dto.lettreMotivationName,
                     status: dto.etat as any,
-                    date: new Date(),
+                    date: dto.dateCreation ? new Date(dto.dateCreation) : new Date(),
                     iaScore: dto.scoreAI,
-                    iaApproved: dto.approvedByAI
+                    iaApproved: dto.approvedByAI,
+                    raisonRefus: dto.raisonRefus || dto.raison
                 }));
                 this.applications.set(mappedApps);
             },
@@ -105,6 +114,16 @@ export class InternshipService {
     }
 
     public mapToInternshipOffer(dto: OffreStageDTO): InternshipOffer {
+        let currentStatus = dto.statut || 'OUVERT';
+        
+        // Auto-close if end date is passed
+        if (dto.dateFin) {
+            const endDate = new Date(dto.dateFin);
+            if (endDate < new Date()) {
+                currentStatus = 'FERME';
+            }
+        }
+
         return {
             id: dto.id?.toString() || '',
             title: dto.titre,
@@ -116,17 +135,28 @@ export class InternshipService {
             dateFin: dto.dateFin,
             testCount: dto.nombreTests,
             candidateCount: dto.nombreCandidatures,
-            typeSelection: dto.typeSelection,
+            typeSelection: dto.typeSelection || 'ALEATOIRE',
             selectedTestId: dto.selectedTestId?.toString(),
-            badge: 'Ouvert',
+            badge: currentStatus === 'FERME' ? 'Fermé' : 'Ouvert',
             techs: (dto.competencesRequises || '').split(',').map(s => s.trim()).filter(s => s),
             highlight: false,
             cta: 'Postuler',
-            dureeStage: dto.dureeStage
+            dureeStage: dto.dureeStage,
+            statut: currentStatus
         };
     }
 
     private mapToDTO(offer: Partial<InternshipOffer>): OffreStageDTO {
+        let currentStatus = offer.statut || 'OUVERT';
+        
+        // Auto-close if end date is passed
+        if (offer.dateFin) {
+            const endDate = new Date(typeof offer.dateFin === 'string' ? offer.dateFin : offer.dateFin.toISOString());
+            if (endDate < new Date()) {
+                currentStatus = 'FERME';
+            }
+        }
+
         return {
             id: offer.id ? parseInt(offer.id) : undefined,
             titre: offer.title || '',
@@ -137,9 +167,10 @@ export class InternshipService {
             dateFin: offer.dateFin ? (typeof offer.dateFin === 'string' ? offer.dateFin : offer.dateFin.toISOString().split('T')[0]) : '',
             nombreCandidatures: offer.candidateCount || 0,
             nombreTests: offer.testCount || 0,
-            typeSelection: offer.typeSelection,
+            typeSelection: offer.typeSelection || 'ALEATOIRE',
             selectedTestId: offer.selectedTestId ? parseInt(offer.selectedTestId) : undefined,
-            dureeStage: offer.dureeStage
+            dureeStage: offer.dureeStage,
+            statut: currentStatus
         };
     }
 
@@ -280,6 +311,9 @@ export class InternshipService {
         });
 
         // Sort: Recommendations first
-        return offers.sort((a, b) => (b.highlight ? 1 : 0) - (a.highlight ? 1 : 0));
+        const sortedOffers = offers.sort((a, b) => (b.highlight ? 1 : 0) - (a.highlight ? 1 : 0));
+        
+        this.offers.set(sortedOffers);
+        return sortedOffers;
     }
 }

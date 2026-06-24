@@ -1,4 +1,4 @@
-import { Component, OnInit, signal, ViewChild, Signal, inject, ChangeDetectorRef } from '@angular/core';
+import { Component, OnInit, signal, ViewChild, Signal, inject, ChangeDetectorRef, computed } from '@angular/core';
 import { Router } from '@angular/router';
 import { ConfirmationService, MessageService } from 'primeng/api';
 import { Table, TableModule } from 'primeng/table';
@@ -118,8 +118,10 @@ interface ExercicePrep {
                     </th>
                     <th pSortableColumn="title">Titre <p-sortIcon field="title" /></th>
                     <th pSortableColumn="location">Localisation <p-sortIcon field="location" /></th>
+                    <th pSortableColumn="dureeStage">Durée <p-sortIcon field="dureeStage" /></th>
                     <th pSortableColumn="dateDebut">Début <p-sortIcon field="dateDebut" /></th>
                     <th pSortableColumn="dateFin">Fin <p-sortIcon field="dateFin" /></th>
+                    <th pSortableColumn="statut">Statut <p-sortIcon field="statut" /></th>
                     <th pSortableColumn="testCount">Tests <p-sortIcon field="testCount" /></th>
                     <th class="text-center">Candidatures</th>
                     <th style="width: 8rem" class="text-center">Actions</th>
@@ -132,10 +134,14 @@ interface ExercicePrep {
                     </td>
                     <td [pTooltip]="offer.title" tooltipPosition="top">{{ truncateTitle(offer.title) }}</td>
                     <td>{{ offer.location }}</td>
+                    <td>{{ internshipService.formatDuration(offer.dureeStage) }}</td>
                     <td>{{ offer.dateDebut | date:'dd/MM/yyyy' }}</td>
                     <td>
                         {{ offer.dateFin | date:'dd/MM/yyyy' }}
                         <p-tag *ngIf="isExpired(offer.dateFin)" value="Expiré" severity="danger" [rounded]="true" styleClass="text-[5px] font-black uppercase ml-1 px-1 py-0" />
+                    </td>
+                    <td>
+                        <p-tag [value]="offer.statut === 'FERME' ? 'Fermé' : 'Ouvert'" [severity]="offer.statut === 'FERME' ? 'danger' : 'success'" [rounded]="true" styleClass="font-black uppercase text-[10px]" />
                     </td>
                     <td>
                         <div class="flex items-center gap-2">
@@ -329,6 +335,11 @@ interface ExercicePrep {
                     </div>
 
                     <div>
+                        <label for="dureeStage" class="block font-bold mb-2">Durée du stage (en mois)</label>
+                        <p-inputnumber id="dureeStage" [(ngModel)]="offer.dureeStage" [min]="1" [max]="36" [showButtons]="true" [fluid]="true" placeholder="Ex: 6"></p-inputnumber>
+                    </div>
+
+                    <div>
                         <label for="dateDebut" class="block font-bold mb-2">Date début</label>
                         <p-datepicker id="dateDebut" [(ngModel)]="offer.dateDebut" dateFormat="dd/mm/yy" [showIcon]="true" appendTo="body" [fluid]="true" />
                     </div>
@@ -336,6 +347,11 @@ interface ExercicePrep {
                     <div>
                         <label for="dateFin" class="block font-bold mb-2">Date fin</label>
                         <p-datepicker id="dateFin" [(ngModel)]="offer.dateFin" dateFormat="dd/mm/yy" [showIcon]="true" appendTo="body" [fluid]="true" />
+                    </div>
+
+                    <div>
+                        <label for="statut" class="block font-bold mb-2">Statut</label>
+                        <p-select id="statut" [(ngModel)]="offer.statut" [options]="statutOptions" optionLabel="label" optionValue="value" appendTo="body" [fluid]="true" placeholder="Sélectionner le statut"></p-select>
                     </div>
                 </div>
             </ng-template>
@@ -1015,6 +1031,10 @@ export class OfferManagement implements OnInit {
     selectedOffers: InternshipOffer[] | null = null;
     offerDialog: boolean = false;
     submitted: boolean = false;
+    statutOptions = [
+        { label: 'Ouvert', value: 'OUVERT' },
+        { label: 'Fermé', value: 'FERME' }
+    ];
 
     // ─── Test Management State (Legacy/Quick) ───────────────────
     testDialog: boolean = false;
@@ -1077,7 +1097,7 @@ export class OfferManagement implements OnInit {
     ];
     trueFalseOpts = [{ label: 'Vrai', value: 'Vrai' }, { label: 'Faux', value: 'Faux' }];
 
-    private internshipService = inject(InternshipService);
+    public internshipService = inject(InternshipService);
     private testService = inject(TestService);
     private exerciceService = inject(ExerciceService);
     private questionService = inject(QuestionService);
@@ -1088,8 +1108,15 @@ export class OfferManagement implements OnInit {
     private cdr = inject(ChangeDetectorRef);
 
     constructor() {
-        this.offers = this.internshipService.getOffers();
         this.tests = this.testService.getTests();
+        this.offers = computed(() => {
+            const rawOffers = this.internshipService.getOffers()();
+            const testsList = this.tests();
+            return rawOffers.map(offer => ({
+                ...offer,
+                testCount: testsList.filter(t => t.offerIds?.includes(offer.id)).length
+            }));
+        });
         this.exercices = this.exerciceService.getExercices();
         this.questions = this.questionService.getQuestions();
         this.applications = this.internshipService.getApplications();
@@ -1116,7 +1143,7 @@ export class OfferManagement implements OnInit {
     }
 
     openNew() {
-        this.offer = {};
+        this.offer = { statut: 'OUVERT', typeSelection: 'ALEATOIRE' };
         this.submitted = false;
         this.offerDialog = true;
     }
@@ -1178,6 +1205,7 @@ export class OfferManagement implements OnInit {
         if (this.offer.title?.trim() && this.offer.details?.trim()) {
             const offerData: any = {
                 ...this.offer,
+                typeSelection: this.offer.typeSelection || 'ALEATOIRE',
                 techs: this.offer.competencesRequises ? this.offer.competencesRequises.split(',').map((s: string) => s.trim()) : [],
                 dateDebut: (this.offer.dateDebut as any) instanceof Date ? (this.offer.dateDebut as any).toISOString().split('T')[0] : this.offer.dateDebut,
                 dateFin: (this.offer.dateFin as any) instanceof Date ? (this.offer.dateFin as any).toISOString().split('T')[0] : this.offer.dateFin,
@@ -1210,6 +1238,10 @@ export class OfferManagement implements OnInit {
             // Load associated tests
             const data = await this.testService.getTestsByOffer(offer.id);
             this.associatedTests.set(data);
+
+            if (this.selectedOfferForTest && this.selectedOfferForTest.typeSelection === 'ALEATOIRE' && !this.selectedOfferForTest.selectedTestId && data.length > 0) {
+                await this.updateOfferSelection(false);
+            }
         } catch (err) {
             console.error('Error loading tests/offer', err);
         }
@@ -1241,6 +1273,10 @@ export class OfferManagement implements OnInit {
             // Optimistic update
             await this.internshipService.updateOffer(updatedOffer);
             this.selectedOfferForTest!.testCount = nextCount;
+
+            if (this.selectedOfferForTest!.typeSelection === 'ALEATOIRE') {
+                await this.updateOfferSelection(false);
+            }
 
             this.messageService.add({
                 severity: 'success',
@@ -1283,6 +1319,10 @@ export class OfferManagement implements OnInit {
             // Update associated tests local state if view is active
             const newTests = await this.testService.getTestsByOffer(this.selectedOfferForTest.id);
             this.associatedTests.set(newTests); // Sync with new tests directly if needed, or rely on existing state
+
+            if (this.selectedOfferForTest.typeSelection === 'ALEATOIRE') {
+                await this.updateOfferSelection(false);
+            }
 
             this.messageService.add({
                 severity: 'success',
@@ -1328,7 +1368,7 @@ export class OfferManagement implements OnInit {
         this.previewVisible = true;
     }
 
-    async updateOfferSelection() {
+    async updateOfferSelection(showToast: boolean = true) {
         if (!this.selectedOfferForTest) return;
 
         try {
@@ -1336,18 +1376,26 @@ export class OfferManagement implements OnInit {
                 const res = await this.internshipService.getRandomTest(this.selectedOfferForTest.id);
                 if (res && res.id) {
                     this.selectedOfferForTest.selectedTestId = res.id.toString();
+                } else {
+                    this.selectedOfferForTest.selectedTestId = undefined;
                 }
-                this.messageService.add({ severity: 'success', summary: 'Succès', detail: 'Test aléatoire sélectionné' });
+                if (showToast) {
+                    this.messageService.add({ severity: 'success', summary: 'Succès', detail: 'Test aléatoire sélectionné' });
+                }
             } else if (this.selectedOfferForTest.typeSelection === 'MANUEL' && this.selectedOfferForTest.selectedTestId) {
                 await this.internshipService.chooseTest(this.selectedOfferForTest.id, this.selectedOfferForTest.selectedTestId);
-                this.messageService.add({ severity: 'success', summary: 'Succès', detail: 'Test manuel sélectionné' });
+                if (showToast) {
+                    this.messageService.add({ severity: 'success', summary: 'Succès', detail: 'Test manuel sélectionné' });
+                }
             }
 
             // Sync with backend via the main update endpoint
             await this.internshipService.updateOffer({ ...this.selectedOfferForTest });
         } catch (err) {
             console.error('Error updating offer selection', err);
-            this.messageService.add({ severity: 'error', summary: 'Erreur', detail: 'Échec de la mise à jour du test' });
+            if (showToast) {
+                this.messageService.add({ severity: 'error', summary: 'Erreur', detail: 'Échec de la mise à jour du test' });
+            }
         }
     }
 
@@ -1383,6 +1431,10 @@ export class OfferManagement implements OnInit {
 
                     // Update local associated tests list (remove it from view)
                     this.associatedTests.update(tests => tests.filter(at => at.id !== test.id));
+
+                    if (this.selectedOfferForTest!.typeSelection === 'ALEATOIRE') {
+                        await this.updateOfferSelection(false);
+                    }
 
                     this.messageService.add({
                         severity: 'success',
@@ -1460,6 +1512,10 @@ export class OfferManagement implements OnInit {
 
         // Ensure local reference is updated for subsequent adds in same dialog session
         this.selectedOfferForTest.testCount = nextCount;
+
+        if (this.selectedOfferForTest.typeSelection === 'ALEATOIRE') {
+            await this.updateOfferSelection(false);
+        }
 
         this.messageService.add({
             severity: 'success',
@@ -1606,6 +1662,10 @@ export class OfferManagement implements OnInit {
 
                     // Update associated tests list if it is active
                     this.associatedTests.update(tests => [...tests, savedTest]);
+
+                    if (this.selectedOfferForTest.typeSelection === 'ALEATOIRE') {
+                        await this.updateOfferSelection(false);
+                    }
                 }
 
                 this.messageService.add({ severity: 'success', summary: 'Succès', detail: 'Test créé avec succès', life: 3000 });

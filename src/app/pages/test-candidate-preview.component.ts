@@ -1,4 +1,4 @@
-import { Component, EventEmitter, Input, Output, inject, OnChanges, SimpleChanges, LOCALE_ID } from '@angular/core';
+import { Component, EventEmitter, Input, Output, inject, OnChanges, SimpleChanges, LOCALE_ID, signal, computed } from '@angular/core';
 import { CommonModule, registerLocaleData } from '@angular/common';
 import localeFr from '@angular/common/locales/fr';
 import { DialogModule } from 'primeng/dialog';
@@ -45,7 +45,7 @@ registerLocaleData(localeFr);
                             </span>
                             <span class="flex items-center gap-2 bg-white/5 px-3 py-1.5 rounded-lg border border-white/10">
                                 <i class="pi pi-bars opacity-70"></i>
-                                <span class="font-medium">{{ test.exerciceCount || exercicesPrep.length }} Exercices</span>
+                                <span class="font-medium">{{ test.exerciceCount || exercicesPrep().length }} Exercices</span>
                             </span>
                         </div>
                     </div>
@@ -62,7 +62,7 @@ registerLocaleData(localeFr);
 
                 <!-- Exercises List -->
                 <div class="space-y-16 pb-10">
-                    <div *ngFor="let ex of exercicesPrep; let i=index" class="exercice-section border-t border-gray-100 pt-10 first:border-0 first:pt-0">
+                    <div *ngFor="let ex of exercicesPrep(); let i=index" class="exercice-section border-t border-gray-100 pt-10 first:border-0 first:pt-0">
                         <!-- Exercise Title Bar -->
                         <div class="flex items-center gap-5 mb-8">
                             <div class="w-14 h-14 bg-[#063970] text-white rounded-2xl flex items-center justify-center text-xl font-black shadow-lg">
@@ -153,20 +153,21 @@ export class TestCandidatePreviewComponent implements OnChanges {
     @Input() test: TechnicalTest | null = null;
     @Output() onClosePreview = new EventEmitter<void>();
 
-    exercicesPrep: any[] = [];
+    testSignal = signal<TechnicalTest | null>(null);
 
-    ngOnChanges(changes: SimpleChanges) {
-        if (this.visible && this.test) {
-            this.loadContent();
-        }
-    }
-
-    loadContent() {
-        if (!this.test) return;
-        this.exercicesPrep = this.exerciceService.getExercicesByTest(this.test.id).map(ex => ({
+    exercicesPrep = computed(() => {
+        const test = this.testSignal();
+        if (!test) return [];
+        return this.exerciceService.getExercicesByTest(test.id).map(ex => ({
             ...ex,
             questions: this.questionService.getQuestionsByExercice(ex.id)
         }));
+    });
+
+    ngOnChanges(changes: SimpleChanges) {
+        if (changes['test']) {
+            this.testSignal.set(this.test);
+        }
     }
 
     onClose() {

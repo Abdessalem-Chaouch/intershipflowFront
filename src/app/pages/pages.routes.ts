@@ -12,6 +12,7 @@ import { GestionStagesComponent } from './stages/gestion-stages.component';
 import { MesAttestationsComponent } from './attestation/mes-attestations.component';
 import { GestionAttestationsComponent } from './attestation/gestion-attestations.component';
 import { ProfileComponent } from './profile/profile.component';
+import { MesStagiairesComponent } from './mes-stagiaires/mes-stagiaires.component';
 
 import { authGuard } from '../services/auth.guard';
 
@@ -24,6 +25,7 @@ export default [
     { path: 'question-management', component: QuestionManagement, canActivate: [authGuard], data: { roles: ['Admin', 'RH', 'Encadrant'] } },
     { path: 'stagiaire-documents', component: StagiaireDocumentsComponent, canActivate: [authGuard], data: { roles: ['Stagiaire'] } },
     { path: 'encadrant-documents', component: EncadrantDocumentsComponent, canActivate: [authGuard], data: { roles: ['Encadrant', 'Admin', 'RH'] } },
+    { path: 'mes-stagiaires', component: MesStagiairesComponent, canActivate: [authGuard], data: { roles: ['Encadrant'] } },
     { path: 'mes-stages', component: MesStagesComponent, canActivate: [authGuard], data: { roles: ['Stagiaire'] } },
     { path: 'gestion-stages', component: GestionStagesComponent, canActivate: [authGuard], data: { roles: ['Admin', 'RH', 'Encadrant'] } },
     { path: 'mes-attestations', component: MesAttestationsComponent, canActivate: [authGuard], data: { roles: ['Stagiaire'] } },

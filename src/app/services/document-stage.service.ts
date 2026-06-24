@@ -19,6 +19,8 @@ export interface DocumentStage {
     lastName?: string;
     photoUrl?: string;
     titreOffre?: string;
+    numeroStage?: number;
+    dateDepot?: string;
 }
 
 export interface ApiResponse<T> {
@@ -42,22 +44,24 @@ export class DocumentStageService {
         return this.documents;
     }
 
-    fetchDocuments() {
-        this.http.get<ApiResponse<DocumentStage[]>>(this.apiUrl).subscribe({
-            next: (response) => this.documents.set(response.data),
-            error: (err) => console.error('Error fetching documents', err)
-        });
+    async fetchDocuments(): Promise<void> {
+        try {
+            const response = await firstValueFrom(this.http.get<any>(this.apiUrl));
+            const data = response && response.data !== undefined ? response.data : response;
+            this.documents.set(Array.isArray(data) ? data : []);
+        } catch (err) {
+            console.error('Error fetching documents', err);
+        }
     }
 
-    fetchDocumentsEncadrant() {
-        this.http.get<any>(`${this.apiUrl}/encadrant`).subscribe({
-            next: (response) => {
-                // Handle both wrapped ApiResponse and direct array response
-                const data = response && response.data !== undefined ? response.data : response;
-                this.documents.set(Array.isArray(data) ? data : []);
-            },
-            error: (err) => console.error('Error fetching encadrant documents', err)
-        });
+    async fetchDocumentsEncadrant(): Promise<void> {
+        try {
+            const response = await firstValueFrom(this.http.get<any>(`${this.apiUrl}/encadrant`));
+            const data = response && response.data !== undefined ? response.data : response;
+            this.documents.set(Array.isArray(data) ? data : []);
+        } catch (err) {
+            console.error('Error fetching encadrant documents', err);
+        }
     }
 
     async getById(id: number): Promise<DocumentStage> {
@@ -94,32 +98,33 @@ export class DocumentStageService {
     }
 
     async getDocumentsByStage(stageId: number): Promise<DocumentStage[]> {
-        const response = await firstValueFrom(this.http.get<ApiResponse<DocumentStage[]>>(`${this.apiUrl}/stage/${stageId}`));
-        return response.data;
+        const response = await firstValueFrom(this.http.get<any>(`${this.apiUrl}/stage/${stageId}`));
+        // Handle both wrapped ApiResponse and direct array response
+        return response && response.data !== undefined ? response.data : response;
     }
 
     async validerDocument(id: number): Promise<DocumentStage> {
-        const response = await firstValueFrom(this.http.put<ApiResponse<DocumentStage>>(`${this.apiUrl}/${id}/validation`, {}));
-        return response.data;
+        const response = await firstValueFrom(this.http.put<any>(`${this.apiUrl}/${id}/validation`, {}));
+        return response && response.data !== undefined ? response.data : response;
     }
 
     async invaliderDocument(id: number): Promise<DocumentStage> {
-        const response = await firstValueFrom(this.http.put<ApiResponse<DocumentStage>>(`${this.apiUrl}/${id}/invalidation`, {}));
-        return response.data;
+        const response = await firstValueFrom(this.http.put<any>(`${this.apiUrl}/${id}/invalidation`, {}));
+        return response && response.data !== undefined ? response.data : response;
     }
 
     async updateNote(id: number, note: number): Promise<DocumentStage> {
-        const response = await firstValueFrom(this.http.put<ApiResponse<DocumentStage>>(`${this.apiUrl}/${id}/note`, null, {
+        const response = await firstValueFrom(this.http.put<any>(`${this.apiUrl}/${id}/note`, null, {
             params: { note: note.toString() }
         }));
-        return response.data;
+        return response && response.data !== undefined ? response.data : response;
     }
 
     async addRemarque(id: number, remarque: string): Promise<DocumentStage> {
-        const response = await firstValueFrom(this.http.put<ApiResponse<DocumentStage>>(`${this.apiUrl}/${id}/remarque`, null, {
+        const response = await firstValueFrom(this.http.put<any>(`${this.apiUrl}/${id}/remarque`, null, {
             params: { remarque }
         }));
-        return response.data;
+        return response && response.data !== undefined ? response.data : response;
     }
 
     async downloadFile(nodeId: string, fileName: string) {
@@ -142,6 +147,6 @@ export class DocumentStageService {
 
     async deleteDocument(id: number): Promise<void> {
         await firstValueFrom(this.http.delete(`${this.apiUrl}/${id}`, { responseType: 'text' }));
-        this.fetchDocuments();
+        await this.fetchDocuments();
     }
 }

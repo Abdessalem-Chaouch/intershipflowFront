@@ -8,8 +8,8 @@ export const authGuard: CanActivateFn = (route: ActivatedRouteSnapshot, state: R
     const currentUser = userService.currentUser();
 
     if (!currentUser) {
-        // Redirect to login if not authenticated
-        router.navigate(['/auth/login']);
+        // Redirect to landing if not authenticated
+        router.navigate(['/landing']);
         return false;
     }
 

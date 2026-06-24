@@ -13,10 +13,6 @@ export interface StagiaireAffecteDTO {
     stagiaireNom: string;
 }
 
-export interface EncadrantDTO {
-    encadrantId: string;
-    encadrantNom: string;
-}
 
 @Injectable({
     providedIn: 'root'
@@ -39,6 +35,13 @@ export class AffectationService {
         );
     }
 
+    /** PUT /affectations/{stageId}/encadrant/{newEncadrantId} */
+    async updateAffectation(stageId: number, newEncadrantId: string): Promise<string> {
+        return firstValueFrom(
+            this.http.put(`${this.apiUrl}/${stageId}/encadrant/${newEncadrantId}`, null, { responseType: 'text' })
+        );
+    }
+
     async getStagiairesByEncadrant(encadrantId: string): Promise<StagiaireAffecteDTO[]> {
         return firstValueFrom(
             this.http.get<StagiaireAffecteDTO[]>(`${this.apiUrl}/encadrant/${encadrantId}/stagiaires`)
@@ -55,4 +58,54 @@ export class AffectationService {
             return null;
         }
     }
+
+    async getMyStagiaires(): Promise<StagiaireDetailsDTO[]> {
+        return firstValueFrom(
+            this.http.get<StagiaireDetailsDTO[]>(`${this.apiUrl}/MesStagiaires`)
+        );
+    }
+
+    async getMyEncadrant(): Promise<EncadrantDTO | null> {
+        try {
+            return await firstValueFrom(
+                this.http.get<EncadrantDTO>(`${this.apiUrl}/MonEncadrant`)
+            );
+        } catch {
+            return null;
+        }
+    }
+}
+
+export interface EncadrantDTO {
+    id?: string;
+    encadrantId?: string;
+    encadrantNom?: string;
+    firstName?: string;
+    lastName?: string;
+    email?: string;
+    phone?: string;
+    photoUrl?: string;
+}
+
+export interface StagiaireDetailsDTO {
+    id: string;
+    firstName: string;
+    lastName: string;
+    username: string;
+    email: string;
+    photoUrl?: string;
+    cin?: string;
+    phone?: string;
+    address?: string;
+    stageId?: number;
+    candidatureId: number;
+    offreStageId: number;
+    titreOffre: string;
+    numeroStage: number;
+    etat: string;
+    dateDebut: string;
+    dateFin: string;
+    documentsValides: boolean;
+    affecte: boolean;
+    encadrantNom: string;
 }

@@ -118,7 +118,7 @@ import { ToastModule } from 'primeng/toast';
                 <div class="col-span-12 md:col-span-3">
                     <a (click)="router.navigate(['/landing'], { fragment: 'home' })" 
                        class="flex items-center justify-center md:justify-start mb-6 cursor-pointer">
-                        <img src="sigaLogo.png" alt="SIGA Logo" class="h-18 lg:h-16 w-auto brightness-0 invert transition-all hover:scale-105" />
+                        <img src="sigaLogo3_cropped.png" alt="SIGA Logo" class="h-16 lg:h-20 w-auto brightness-0 invert transition-all hover:scale-105" />
                     </a>
                     <p class="text-blue-200 dark:text-blue-100/60 text-base leading-relaxed text-center md:text-left transition-colors">
                         Système Informatique et Gestion Automatisée. Innovons ensemble depuis 1996.

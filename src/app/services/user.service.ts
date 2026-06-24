@@ -76,6 +76,7 @@ export class UserService {
     // ───────────────────────────────────────────────────────────────────────
 
     private _users = signal<User[]>([]);
+    public allUsers = this._users.asReadonly();
 
     currentUser = signal<User | null>(null);
     token = signal<string | null>(null);
@@ -118,18 +119,13 @@ export class UserService {
                     ...(user?.role !== 'User' ? [{
                         label: 'Tableau de bord',
                         icon: 'pi pi-th-large',
-                        command: () => { this.router.navigate(['/']); }
+                        command: () => { this.router.navigate(['/dashboard']); }
                     }] : []),
                     {
                         label: 'Paramètres / Profil',
                         icon: 'pi pi-cog',
                         command: () => { 
-                            const user = this.currentUser();
-                            if (user?.role === 'User') {
-                                this.router.navigate(['/landing/profile']);
-                            } else {
-                                this.router.navigate(['/pages/profile']);
-                            }
+                            this.router.navigate(['/landing/profile']);
                         }
                     }
                 ]
@@ -177,13 +173,17 @@ export class UserService {
     private decodeAndSetUser(token: string) {
         const decoded: any = this.decodeToken(token);
         if (decoded) {
+            const roles = [
+                ...(decoded?.realm_access?.roles || []),
+                ...(decoded?.resource_access?.springbootClient?.roles || [])
+            ];
             const userObj: User = {
                 id: decoded.sub,
                 username: decoded.preferred_username || decoded.sub,
                 email: decoded.email,
                 firstName: decoded.given_name,
                 lastName: decoded.family_name,
-                role: this.mapBackendRole(decoded.realm_access?.roles || [])
+                role: this.mapBackendRole(roles)
             };
             this.currentUser.set(userObj);
             localStorage.setItem('user_data', JSON.stringify(userObj));
@@ -409,13 +409,17 @@ export class UserService {
                 this.token.set(accessToken);
 
                 const decoded: any = this.decodeToken(accessToken);
+                const roles = [
+                    ...(decoded?.realm_access?.roles || []),
+                    ...(decoded?.resource_access?.springbootClient?.roles || [])
+                ];
                 const userObj: User = {
                     id: decoded?.sub,
                     username: response.username || decoded?.preferred_username || decoded?.sub || response.email || request.username,
                     email: response.email || decoded?.email,
                     firstName: response.firstName || decoded?.given_name || 'Utilisateur',
                     lastName: response.lastName || decoded?.family_name || '',
-                    role: response.role ? this.mapBackendRole([response.role.toLowerCase()]) : this.mapBackendRole(decoded?.realm_access?.roles || [])
+                    role: response.role ? this.mapBackendRole([response.role.toLowerCase()]) : this.mapBackendRole(roles)
                 };
 
                 console.log('Setting currentUser signal with:', userObj);

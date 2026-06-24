@@ -33,6 +33,10 @@ export class AttestationService {
         return await firstValueFrom(this.http.get<Attestation[]>(`${this.apiUrl}/stage/${stageId}`));
     }
 
+    async getAttestationsByEncadrant(): Promise<Attestation[]> {
+        return await firstValueFrom(this.http.get<Attestation[]>(`${this.apiUrl}/encadrant`));
+    }
+
     async downloadFile(nodeId: string, fileName: string) {
         // We use the same download endpoint from DocumentStageController
         const url = `http://localhost:8081/documents-stage/download/${nodeId}?fileName=${encodeURIComponent(fileName)}`;

@@ -1,4 +1,4 @@
-import { Component, OnInit, Signal, signal, inject, ChangeDetectorRef, OnDestroy, computed } from '@angular/core';
+import { Component, OnInit, Signal, signal, inject, ChangeDetectorRef, OnDestroy, computed, effect } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TableModule } from 'primeng/table';
 import { ButtonModule } from 'primeng/button';
@@ -16,7 +16,7 @@ import { TooltipModule } from 'primeng/tooltip';
 import { InternshipService, InternshipOffer, InternshipApplication, OffreStageDTO } from '@/app/services/internship.service';
 import { CandidatureService } from '@/app/services/candidature.service';
 import { StageService, Stage, EtatStage } from '@/app/services/stage.service';
-import { UserService } from '@/app/services/user.service';
+import { UserService, User } from '@/app/services/user.service';
 import { firstValueFrom } from 'rxjs';
 import { HttpClient } from '@angular/common/http';
 import { Router } from '@angular/router';
@@ -73,7 +73,7 @@ import { FooterWidget } from '../landing/components/footerwidget';
                 <!-- Offers Grid -->
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                     <div *ngFor="let offer of filteredOffers()" 
-                         class="pricing-card group"
+                         class="pricing-card group bg-white dark:!bg-[#06111d] border border-slate-100 dark:border-blue-900/20 shadow-sm hover:shadow-xl transition-all duration-500"
                          [class.featured]="offer.highlight">
                         
                         <!-- Premium Badge for Featured -->
@@ -146,14 +146,14 @@ import { FooterWidget } from '../landing/components/footerwidget';
                                         (click)="openDetailsDialog(offer)"
                                         pTooltip="Détails"></button>
                                 
-                                <div *ngIf="!getApplicationStatus(offer.id) && hasActiveInternship()"
+                                <div *ngIf="!getApplicationStatus(offer.id) && userHasActiveInternship()"
                                      class="flex-1 flex items-center justify-center gap-2 bg-slate-100 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 !rounded-xl text-[10px] font-black border border-slate-200 dark:border-slate-700"
-                                     [pTooltip]="'Tu as déjà un stage en état : ' + (stageActif()?.etat || '')">
+                                     [pTooltip]="'Tu as déjà un stage ' ">
                                     <i class="pi pi-lock"></i>
                                     <span>STAGE EN COURS</span>
                                 </div>
 
-                                <div *ngIf="!getApplicationStatus(offer.id) && !hasActiveInternship() && !hasCompletedInternshipFor(offer.id) && !canUserApply()"
+                                <div *ngIf="!getApplicationStatus(offer.id) && !userHasActiveInternship() && !hasCompletedInternshipFor(offer.id) && !canUserApply()"
                                      class="flex-1 flex items-center justify-center gap-2 bg-slate-50 dark:bg-slate-800/30 text-slate-400 dark:text-slate-500 !rounded-xl text-[10px] font-black border border-slate-200 dark:border-slate-700/50"
                                      pTooltip="L'application est réservée aux profils stagiaires.">
                                     <i class="pi pi-lock"></i>
@@ -239,21 +239,34 @@ import { FooterWidget } from '../landing/components/footerwidget';
                                 </div>
                             </div>
 
-                            <div class="flex flex-col gap-4 px-2">
-                                <div class="flex items-center gap-3">
-                                    <i class="pi pi-clock text-[#063970] dark:text-blue-400 font-bold"></i>
-                                    <span class="text-sm font-bold text-slate-700 dark:text-blue-100/80">Durée : {{ internshipService.formatDuration(selectedOffer?.dureeStage) }}</span>
-                                </div>
-                                <div class="flex items-center gap-3">
-                                    <i class="pi pi-map-marker text-[#063970] dark:text-blue-400 font-bold"></i>
-                                    <span class="text-sm font-bold text-slate-700 dark:text-blue-100/80">Lieu : {{ selectedOffer?.location }}</span>
-                                </div>
                                 <div *ngIf="selectedOffer?.dateFin" class="flex items-center gap-3">
                                     <i class="pi pi-calendar-times text-red-400 font-bold"></i>
                                     <span class="text-sm font-bold text-slate-700 dark:text-blue-100/80">Expiration : {{ selectedOffer.dateFin | date:'dd MMMM yyyy' }}</span>
                                 </div>
                             </div>
                         </div>
+
+                        <!-- Stage Information Section -->
+                        <div *ngIf="getStageForOffer(selectedOffer?.id || '') as stage" class="mt-4 pt-8 border-t border-slate-100 dark:border-blue-800/40">
+                            <h6 class="text-xs font-black text-[#063970] dark:text-blue-300 uppercase tracking-widest flex items-center gap-2 mb-6">
+                                <i class="pi pi-info-circle"></i> Détails de votre stage
+                            </h6>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div class="bg-blue-50/50 dark:bg-blue-900/10 p-4 rounded-2xl border border-blue-100/50 dark:border-blue-800/20 shadow-sm">
+                                    <span class="text-[10px] font-bold text-slate-400 dark:text-blue-200/40 uppercase block mb-1">État du stage</span>
+                                    <p-tag [value]="stage.etat" [severity]="getStageSeverity(stage.etat)" styleClass="text-[10px] font-black uppercase" />
+                                </div>
+                                <div class="bg-blue-50/50 dark:bg-blue-900/10 p-4 rounded-2xl border border-blue-100/50 dark:border-blue-800/20 shadow-sm">
+                                    <span class="text-[10px] font-bold text-slate-400 dark:text-blue-200/40 uppercase block mb-1">Encadrant Affecté</span>
+                                    <div class="flex items-center gap-2">
+                                        <i class="pi pi-user-edit text-[#063970] dark:text-blue-400"></i>
+                                        <span *ngIf="(stage.encadrantNom && stage.encadrantNom !== 'N/A') || (stage.encadrantId && getSupervisorName(stage.encadrantId) !== 'N/A') || $any(stage).encadrantFirstName" class="text-sm font-bold text-slate-700 dark:text-blue-100">
+                                            {{ ($any(stage).encadrantFirstName || $any(stage).encadrantLastName) ? (($any(stage).encadrantFirstName || '') + ' ' + ($any(stage).encadrantLastName || '')).trim() : (stage.encadrantNom || getSupervisorName(stage.encadrantId, stage)) }}
+                                        </span>
+                                        <p-tag *ngIf="(!stage.encadrantNom || stage.encadrantNom === 'N/A') && (!stage.encadrantId || getSupervisorName(stage.encadrantId) === 'N/A') && !$any(stage).encadrantFirstName" value="En attente d'affectation" severity="secondary" styleClass="text-[10px] font-black uppercase" />
+                                    </div>
+                                </div>
+                            </div>
                     </div>
                 </div>
             </ng-template>
@@ -274,7 +287,7 @@ import { FooterWidget } from '../landing/components/footerwidget';
                         
                         <div *ngIf="hasActiveInternship()" class="flex items-center gap-2 text-amber-600 dark:text-amber-400 font-bold text-sm bg-amber-50 dark:bg-amber-900/20 px-4 py-2 rounded-xl border border-amber-100 dark:border-amber-900/30">
                             <i class="pi pi-exclamation-triangle"></i>
-                            <span>Tu as déjà un stage ({{ stageActif()?.etat }})</span>
+                            <span>Tu as déjà un stage </span>
                         </div>
 
                         <div *ngIf="!hasActiveInternship() && hasCompletedInternshipFor(selectedOffer?.id)" class="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 font-bold text-sm bg-emerald-50 dark:bg-emerald-900/20 px-4 py-2 rounded-xl border border-emerald-100 dark:border-emerald-800/30">
@@ -325,9 +338,9 @@ import { FooterWidget } from '../landing/components/footerwidget';
                                 </div>
                                 <div class="flex-1 overflow-hidden">
                                     <p class="text-sm font-bold text-slate-900 dark:text-white truncate m-0">{{applicationForm.cvFile ? applicationForm.cvFile.name : 'Curriculum Vitae'}}</p>
-                                    <p class="text-[10px] font-bold text-slate-400 uppercase mt-0.5">Format PDF max 5Mo</p>
+                                    <p class="text-[10px] font-bold text-slate-400 uppercase mt-0.5">Format PDF, DOC, DOCX max 5Mo</p>
                                 </div>
-                                <p-fileUpload mode="basic" [auto]="true" chooseLabel="Télécharger" (onSelect)="onFileSelect($event, 'cv')" class="p-button-sm" />
+                                <p-fileUpload mode="basic" [auto]="true" chooseLabel="Télécharger" accept=".pdf,.doc,.docx" (onSelect)="onFileSelect($event, 'cv')" class="p-button-sm" />
                             </div>
                         </div>
 
@@ -368,7 +381,7 @@ import { FooterWidget } from '../landing/components/footerwidget';
             <ng-template pTemplate="footer">
                 <div *ngIf="applyStep === 1" class="flex justify-end gap-3 p-4">
                     <button pButton label="Annuler" class="p-button-text p-button-secondary" (click)="applyDialog = false"></button>
-                    <button pButton label="Continuer vers le test" icon="pi pi-arrow-right" iconPos="right" [disabled]="!isFormValid()" [loading]="isSubmitting" (click)="goToTestStep()" class="!rounded-xl !px-6 !font-black !bg-[#063970] !border-none"></button>
+                    <button pButton [label]="selectedOffer?.selectedTestId ? 'Continuer vers le test' : 'Postuler'" [icon]="selectedOffer?.selectedTestId ? 'pi pi-arrow-right' : 'pi pi-check'" iconPos="right" [disabled]="!isFormValid()" [loading]="isSubmitting" (click)="goToTestStep()" class="!rounded-xl !px-6 !font-black !bg-[#063970] !border-none"></button>
                 </div>
             </ng-template>
         </p-dialog>
@@ -377,8 +390,6 @@ import { FooterWidget } from '../landing/components/footerwidget';
 
         <style>
             .pricing-card {
-                background: white;
-                border: 1px solid #f1f5f9;
                 border-radius: 2rem;
                 display: flex;
                 flex-direction: column;
@@ -386,11 +397,6 @@ import { FooterWidget } from '../landing/components/footerwidget';
                 position: relative;
                 overflow: visible;
                 height: 100%;
-            }
-
-            :host-context(.dark) .pricing-card {
-                background: #06111d;
-                border-color: #1e293b;
             }
 
             .pricing-card:hover {
@@ -404,7 +410,12 @@ import { FooterWidget } from '../landing/components/footerwidget';
             }
 
             .featured {
-                border: 2px solid #063970;
+                border: 2px solid #063970 !important;
+            }
+
+            :host-context(.dark) .featured {
+                border-color: #3b82f6 !important;
+                background: linear-gradient(180deg, #06111d 0%, #030d17 100%) !important;
             }
 
             .featured-badge {
@@ -454,16 +465,34 @@ import { FooterWidget } from '../landing/components/footerwidget';
     `
 })
 export class InternshipList implements OnInit {
+    private cdr = inject(ChangeDetectorRef);
+    public internshipService = inject(InternshipService);
+    private candidatureService = inject(CandidatureService);
+    private testService = inject(TestService);
+    private messageService = inject(MessageService);
+    private userService = inject(UserService);
+    private router = inject(Router);
+    private http = inject(HttpClient);
+    private stageService = inject(StageService);
+
     allOffers = signal<InternshipOffer[]>([]);
     filteredOffers = signal<InternshipOffer[]>([]);
     stageActif = signal<Stage | null>(null);
     mesStages = signal<Stage[]>([]);
-    applications!: Signal<InternshipApplication[]>;
+    allUsers = signal<User[]>([]);
 
     canUserApply = computed(() => {
         const role = this.userService.currentUser()?.role;
         return role !== 'Admin' && role !== 'RH' && role !== 'Encadrant';
     });
+
+    userHasActiveInternship = computed(() => {
+        return this.mesStages().some(s =>
+            [EtatStage.ACCEPTE, EtatStage.EN_COURS, EtatStage.ATT_VALIDATION_ENCADRANT].includes(s.etat)
+        );
+    });
+
+    applications = this.internshipService.getApplications();
 
     applyDialog = false;
     detailsDialog = false;
@@ -477,38 +506,71 @@ export class InternshipList implements OnInit {
         letterFile: null as File | null
     };
 
-    private cdr = inject(ChangeDetectorRef);
-    public internshipService = inject(InternshipService);
-    private candidatureService = inject(CandidatureService);
-    private testService = inject(TestService);
-    private messageService = inject(MessageService);
-    private userService = inject(UserService);
-    private router = inject(Router);
-    private http = inject(HttpClient);
-    private stageService = inject(StageService);
+
 
     applyStep = 1;
     assignedTest: TechnicalTest | null = null;
     testResult: { score: number, passed: boolean } | null = null;
     createdCandidatureId: number | null = null;
 
-    async ngOnInit() {
-        await this.loadOffers();
-        await this.loadActiveStage();
-        await this.loadMesStages();
-        this.applications = this.internshipService.getApplications();
+    constructor() {
+        effect(async () => {
+            const user = this.userService.currentUser();
+            try {
+                await Promise.all([
+                    this.loadOffers(),
+                    this.loadActiveStage(),
+                    this.loadMesStages(),
+                    this.loadUsers()
+                ]);
+            } catch (err) {
+                console.error('Error loading data on user change', err);
+            } finally {
+                this.cdr.detectChanges();
+            }
+        }, { allowSignalWrites: true });
     }
 
-    async loadActiveStage() {
+    async ngOnInit() {
+        this.cdr.detectChanges();
+    }
+
+    async loadUsers() {
+        if (!this.userService.currentUser()) {
+            this.allUsers.set([]);
+            return;
+        }
         try {
-            const stage = await this.stageService.getStageActif();
-            this.stageActif.set(stage);
+            const [basicUsers, encadrants] = await Promise.all([
+                this.userService.getUsers(),
+                this.userService.getEncadrants()
+            ]);
+            const mergedUsers = [...basicUsers];
+            encadrants.forEach(enc => {
+                if (!mergedUsers.find(u => u.id === enc.id)) {
+                    mergedUsers.push(enc);
+                }
+            });
+            this.allUsers.set(mergedUsers);
         } catch (err) {
-            this.stageActif.set(null);
+            console.error('Error loading users', err);
         }
     }
 
+    async loadActiveStage() {
+        if (!this.userService.currentUser()) {
+            this.stageActif.set(null);
+            return;
+        }
+        const stage = await this.stageService.getStageActif();
+        this.stageActif.set(stage);
+    }
+
     async loadMesStages() {
+        if (!this.userService.currentUser()) {
+            this.mesStages.set([]);
+            return;
+        }
         try {
             const stages = await this.stageService.getMesStages();
             this.mesStages.set(stages);
@@ -523,11 +585,42 @@ export class InternshipList implements OnInit {
         return this.mesStages().some(s => s.offreStageId === id && s.etat === EtatStage.VALIDE);
     }
 
+    getStageForOffer(offerId: string): Stage | undefined {
+        return this.mesStages().find(s => s.offreStageId.toString() === offerId);
+    }
+
+    getStageSeverity(etat: EtatStage) {
+        switch (etat) {
+            case EtatStage.VALIDE: return 'success';
+            case EtatStage.NON_VALIDE: return 'danger';
+            case EtatStage.ANNULE: return 'danger';
+            case EtatStage.EN_COURS: return 'info';
+            case EtatStage.ATT_VALIDATION_ENCADRANT: return 'warn';
+            default: return 'secondary';
+        }
+    }
+
+    getSupervisorName(id: string | undefined, stage?: Stage): string {
+        if (stage?.encadrantFirstName || stage?.encadrantLastName) {
+            return `${stage.encadrantFirstName ?? ''} ${stage.encadrantLastName ?? ''}`.trim();
+        }
+        if (!id) return 'N/A';
+        const users = this.allUsers();
+        const superv = users.find(u =>
+            u.id?.toString().toLowerCase() === id.toString().toLowerCase() ||
+            u.username?.toLowerCase() === id.toLowerCase()
+        );
+        if (superv) {
+            const name = `${superv.firstName || ''} ${superv.lastName || ''}`.trim();
+            return name || superv.username || 'N/A';
+        }
+        return 'N/A';
+    }
+
     hasActiveInternship() {
-        const stage = this.stageActif();
-        if (!stage) return false;
-        
-        return [EtatStage.ACCEPTE, EtatStage.EN_COURS, EtatStage.ATT_VALIDATION_ENCADRANT].includes(stage.etat);
+        return this.mesStages().some(s =>
+            [EtatStage.ACCEPTE, EtatStage.EN_COURS, EtatStage.ATT_VALIDATION_ENCADRANT].includes(s.etat)
+        );
     }
 
     async loadOffers() {
@@ -535,13 +628,14 @@ export class InternshipList implements OnInit {
             let offers: InternshipOffer[] = [];
             if (this.userService.currentUser()) {
                 offers = await this.internshipService.getOffersWithRecommendations();
-                this.internshipService.fetchApplications();
             } else {
                 const dtos = await firstValueFrom(this.http.get<OffreStageDTO[]>('http://localhost:8081/api/offres'));
                 offers = dtos.map(dto => this.internshipService.mapToInternshipOffer(dto));
             }
-            this.allOffers.set(offers);
-            this.filteredOffers.set(offers);
+            this.internshipService.fetchApplications();
+            const activeOffers = offers.filter(o => o.statut !== 'FERME');
+            this.allOffers.set(activeOffers);
+            this.filteredOffers.set(activeOffers);
         } catch (err) {
             console.error('Error loading offers', err);
         }
@@ -553,8 +647,8 @@ export class InternshipList implements OnInit {
             this.filteredOffers.set(this.allOffers());
             return;
         }
-        const filtered = this.allOffers().filter(o => 
-            o.title.toLowerCase().includes(query) || 
+        const filtered = this.allOffers().filter(o =>
+            o.title.toLowerCase().includes(query) ||
             o.techs.some(t => t.toLowerCase().includes(query)) ||
             o.location?.toLowerCase().includes(query)
         );
@@ -563,7 +657,15 @@ export class InternshipList implements OnInit {
 
     getApplicationStatus(offerId: string): string | null {
         const app = this.applications().find(a => a.offerId === offerId);
-        return app ? app.status : null;
+        if (!app) return null;
+
+        // Force 'FINI' if there's a validated/invalidated stage for this offer
+        const stage = this.mesStages().find(s => s.offreStageId.toString() === offerId);
+        if (stage && (stage.etat === EtatStage.VALIDE || stage.etat === EtatStage.NON_VALIDE)) {
+            return 'FINI';
+        }
+
+        return app.status;
     }
 
     getStatusSeverity(status: string) {
@@ -571,6 +673,7 @@ export class InternshipList implements OnInit {
             case 'ACCEPTEE': return 'success';
             case 'REFUSEE': return 'danger';
             case 'EN_ATTENTE': return 'warn';
+            case 'FINI': return 'info';
             default: return 'info';
         }
     }
@@ -583,15 +686,16 @@ export class InternshipList implements OnInit {
             return;
         }
         this.selectedOffer = offer;
-        this.applicationForm = { 
-            firstName: user.firstName || '', 
-            lastName: user.lastName || '', 
-            cvFile: null, 
-            letterFile: null 
+        this.applicationForm = {
+            firstName: user.firstName || '',
+            lastName: user.lastName || '',
+            cvFile: null,
+            letterFile: null
         };
         this.applyStep = 1;
         this.testResult = null;
         this.assignedTest = null;
+        this.createdCandidatureId = null;
         this.applyDialog = true;
     }
 
@@ -609,6 +713,8 @@ export class InternshipList implements OnInit {
             if (!this.selectedOffer?.selectedTestId) {
                 this.applyStep = 3;
                 this.testResult = { score: 0, passed: false };
+                this.internshipService.fetchOffers();
+                this.messageService.add({ severity: 'success', summary: 'Succès', detail: 'Candidature envoyée !' });
                 this.cdr.detectChanges();
                 return;
             }
@@ -638,8 +744,17 @@ export class InternshipList implements OnInit {
     onFileSelect(event: any, type: 'cv' | 'letter') {
         const file = event.files[0];
         if (file) {
-            if (type === 'cv') this.applicationForm.cvFile = file;
-            else this.applicationForm.letterFile = file;
+            if (type === 'cv') {
+                const ext = file.name.split('.').pop()?.toLowerCase();
+                if (ext !== 'pdf' && ext !== 'doc' && ext !== 'docx') {
+                    this.messageService.add({ severity: 'error', summary: 'Erreur', detail: 'Le CV doit être au format PDF, DOC ou DOCX.' });
+                    this.applicationForm.cvFile = null;
+                    return;
+                }
+                this.applicationForm.cvFile = file;
+            } else {
+                this.applicationForm.letterFile = file;
+            }
         }
     }
 

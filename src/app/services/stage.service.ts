@@ -7,7 +7,8 @@ export enum EtatStage {
     EN_COURS = 'EN_COURS',
     ATT_VALIDATION_ENCADRANT = 'ATT_VALIDATION_ENCADRANT',
     VALIDE = 'VALIDE',
-    NON_VALIDE = 'NON_VALIDE'
+    NON_VALIDE = 'NON_VALIDE',
+    ANNULE = 'ANNULE'
 }
 
 export interface Stage {
@@ -22,6 +23,9 @@ export interface Stage {
     dateFin: string;
     documentsValides: boolean;
     encadrantId: string;
+    encadrantFirstName?: string;
+    encadrantLastName?: string;
+    encadrantUsername?: string;
     firstName?: string;
     lastName?: string;
     username?: string;
@@ -37,7 +41,9 @@ export class StageService {
     private http = inject(HttpClient);
     private apiUrl = 'http://localhost:8081/api/stages';
 
-    constructor() {}
+    activeStage = signal<Stage | null>(null);
+
+    constructor() { }
 
     async getAllStages(): Promise<Stage[]> {
         return await firstValueFrom(this.http.get<Stage[]>(`${this.apiUrl}/all`));
@@ -53,8 +59,11 @@ export class StageService {
 
     async getStageActif(): Promise<Stage | null> {
         try {
-            return await firstValueFrom(this.http.get<Stage>(`${this.apiUrl}/actif`));
+            const stage = await firstValueFrom(this.http.get<Stage>(`${this.apiUrl}/actif`));
+            this.activeStage.set(stage);
+            return stage;
         } catch (err) {
+            this.activeStage.set(null);
             return null;
         }
     }
@@ -79,6 +88,14 @@ export class StageService {
 
     async modifierDates(id: number, dateDebut: string, dateFin: string): Promise<Stage> {
         return await firstValueFrom(this.http.put<Stage>(`${this.apiUrl}/${id}/dates`, { dateDebut, dateFin }));
+    }
+
+    async updateEtatStage(id: number, etat: EtatStage): Promise<Stage> {
+        const stage = await firstValueFrom(this.http.put<Stage>(`${this.apiUrl}/${id}/etat`, null, {
+            params: { etat }
+        }));
+        this.activeStage.set(stage);
+        return stage;
     }
 
     async getStagesByUtilisateur(userId: string): Promise<Stage[]> {

@@ -109,3 +109,118 @@
     background: #06284d !important;
     border-top: 1px solid rgba(59, 130, 246, 0.2) !important;
 }
+
+/* Table Modern Styling */
+.p-datatable-modern {
+    .p-datatable-thead > tr > th {
+        background: transparent !important;
+        border-bottom: 2px solid rgba(226, 232, 240, 0.5) !important;
+        transition: all 0.2s ease;
+    }
+
+    .p-datatable-tbody > tr {
+        background: transparent !important;
+        border-bottom: 1px solid rgba(226, 232, 240, 0.3) !important;
+        
+        &:last-child {
+            border-bottom: none !important;
+        }
+    }
+
+    &.no-border-table {
+        .p-datatable-thead > tr > th,
+        .p-datatable-tbody > tr > td {
+            border-left: none !important;
+            border-right: none !important;
+        }
+    }
+}
+
+/* Modern Datepicker override */
+.modern-datepicker {
+    .p-inputtext {
+        border-radius: 1rem !important;
+        padding: 0.75rem 1rem !important;
+        border-color: rgba(226, 232, 240, 1) !important;
+        background: #f8fafc !important;
+        font-size: 0.875rem !important;
+        
+        &:focus {
+            background: white !important;
+            border-color: #3b82f6 !important;
+            box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1) !important;
+        }
+    }
+}
+
+:is(html.app-dark, .app-dark) .modern-datepicker .p-inputtext {
+    background: #0f172a !important;
+    border-color: #1e293b !important;
+    color: white !important;
+}
+
+/* Dialog Clean Version */
+.modern-dialog-clean {
+    .p-dialog-content {
+        padding: 0 !important;
+        background: transparent !important;
+    }
+    
+    .p-dialog-header {
+        display: none !important;
+    }
+}
+
+/* Clean Table Styling */
+.p-datatable-clean {
+    .p-datatable-thead > tr > th {
+        background: transparent !important;
+        border-bottom: 1px solid rgba(226, 232, 240, 0.4) !important;
+        color: #94a3b8 !important;
+    }
+
+    .p-datatable-tbody > tr {
+        background: transparent !important;
+        border-bottom: 1px solid rgba(226, 232, 240, 0.2) !important;
+        
+        &:last-child {
+            border-bottom: none !important;
+        }
+        
+        &:hover {
+            background: rgba(248, 250, 252, 0.5) !important;
+        }
+    }
+}
+
+/* Modern Clean Dashboard Table */
+.p-datatable-modern-clean {
+    .p-datatable-thead > tr > th {
+        background: transparent !important;
+        border-bottom: 2px solid rgba(241, 245, 249, 0.5) !important;
+        color: #64748b !important;
+        padding: 1.5rem 2rem !important;
+    }
+
+    .p-datatable-tbody > tr {
+        background: transparent !important;
+        border-bottom: 1px solid rgba(241, 245, 249, 0.3) !important;
+        transition: all 0.3s ease;
+        
+        &:last-child {
+            border-bottom: none !important;
+        }
+        
+        &:hover {
+            background: rgba(248, 250, 252, 0.8) !important;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px -4px rgba(0, 0, 0, 0.05);
+        }
+    }
+
+    .p-paginator {
+        background: transparent !important;
+        border: none !important;
+        padding: 2rem !important;
+    }
+}

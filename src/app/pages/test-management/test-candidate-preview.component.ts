@@ -1,4 +1,4 @@
-import { Component, EventEmitter, Input, Output, inject, OnChanges, SimpleChanges, LOCALE_ID } from '@angular/core';
+import { Component, EventEmitter, Input, Output, inject, OnChanges, SimpleChanges, LOCALE_ID, signal, computed } from '@angular/core';
 import { CommonModule, registerLocaleData } from '@angular/common';
 import localeFr from '@angular/common/locales/fr';
 import { DialogModule } from 'primeng/dialog';
@@ -34,7 +34,7 @@ registerLocaleData(localeFr);
                     <h1 class="text-2xl font-black text-slate-900 mb-2 tracking-tight">{{ test.titre }}</h1>
                     <div class="flex items-center gap-4 text-slate-500 text-[10px] font-bold uppercase tracking-widest">
                         <span class="flex items-center gap-1.5"><i class="pi pi-clock text-blue-500"></i> {{ test.dureeMinutes }} minutes</span>
-                        <span class="flex items-center gap-1.5"><i class="pi pi-list text-blue-500"></i> {{ exercicesPrep.length }} exercices</span>
+                        <span class="flex items-center gap-1.5"><i class="pi pi-list text-blue-500"></i> {{ exercicesPrep().length }} exercices</span>
                         <span class="flex items-center gap-1.5"><i class="pi pi-shield text-blue-500"></i> Certifié SIGA</span>
                     </div>
                 </div>
@@ -49,7 +49,7 @@ registerLocaleData(localeFr);
 
                     <!-- Exercises List -->
                     <div class="space-y-16">
-                        <div *ngFor="let ex of exercicesPrep; let i=index" class="exercice-section relative group">
+                        <div *ngFor="let ex of exercicesPrep(); let i=index" class="exercice-section relative group">
                             
                             <!-- Continuous Vertical Line for this exercise -->
                             <div class="absolute left-[19px] top-[40px] bottom-0 w-[2px] bg-slate-100 z-0"></div>
@@ -146,20 +146,21 @@ export class TestCandidatePreviewComponent implements OnChanges {
     @Input() test: TechnicalTest | null = null;
     @Output() onClosePreview = new EventEmitter<void>();
 
-    exercicesPrep: any[] = [];
+    testSignal = signal<TechnicalTest | null>(null);
 
-    ngOnChanges(changes: SimpleChanges) {
-        if (this.visible && this.test) {
-            this.loadContent();
-        }
-    }
-
-    loadContent() {
-        if (!this.test) return;
-        this.exercicesPrep = this.exerciceService.getExercicesByTest(this.test.id).map((ex: any) => ({
+    exercicesPrep = computed(() => {
+        const test = this.testSignal();
+        if (!test) return [];
+        return this.exerciceService.getExercicesByTest(test.id).map((ex: any) => ({
             ...ex,
             questions: this.questionService.getQuestionsByExercice(ex.id)
         }));
+    });
+
+    ngOnChanges(changes: SimpleChanges) {
+        if (changes['test']) {
+            this.testSignal.set(this.test);
+        }
     }
 
     onClose() {

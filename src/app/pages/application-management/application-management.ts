@@ -118,9 +118,8 @@ import { StageService, Stage } from '../../services/stage.service';
                         <th pSortableColumn="iaScore" class="py-5 !bg-transparent text-slate-500 dark:text-slate-400 text-[10px] font-black uppercase tracking-[0.15em] text-center">Score IA <p-sortIcon field="iaScore" /></th>
                         <th class="py-5 !bg-transparent text-slate-500 dark:text-slate-400 text-[10px] font-black uppercase tracking-[0.15em] text-center">Approuvé IA</th>
                         <th class="py-5 !bg-transparent text-slate-500 dark:text-slate-400 text-[10px] font-black uppercase tracking-[0.15em] text-center">Test Score</th>
-                        <th pSortableColumn="status" class="py-5 !bg-transparent text-slate-500 dark:text-slate-400 text-[10px] font-black uppercase tracking-[0.15em] text-center">Statut <p-sortIcon field="status" /></th>
                         <th class="py-5 !bg-transparent text-slate-500 dark:text-slate-400 text-[10px] font-black uppercase tracking-[0.15em] text-center">Stage</th>
-                        <th class="py-5 !bg-transparent text-slate-500 dark:text-slate-400 text-[10px] font-black uppercase tracking-[0.15em] text-center">Actions</th>
+                        <th pSortableColumn="status" class="py-5 !bg-transparent text-slate-500 dark:text-slate-400 text-[10px] font-black uppercase tracking-[0.15em] text-center">Décision & Statut <p-sortIcon field="status" /></th>
                     </tr>
                 </ng-template>
 
@@ -138,26 +137,29 @@ import { StageService, Stage } from '../../services/stage.service';
                             </div>
                         </td>
                         <td>
-                            <div class="inline-flex items-center px-3 py-1.5 rounded-xl text-[10px] font-black bg-[#063970]/5 dark:bg-[#063970]/20 text-[#063970] dark:text-blue-300 border border-[#063970]/10 uppercase tracking-wider">
+                            <div class="inline-flex items-center px-4 py-2 rounded-2xl text-[10px] font-black bg-slate-50 dark:bg-slate-800/40 text-[#063970] dark:text-blue-300 border border-slate-100 dark:border-slate-700 uppercase tracking-wider shadow-sm">
+                                <i class="pi pi-briefcase mr-2 opacity-60"></i>
                                 {{ app.offerTitle }}
                             </div>
                         </td>
                         <td>
                             <div class="flex gap-2">
-                                <button pButton icon="pi pi-file-pdf" 
-                                        class="p-button-text p-button-info !w-9 !h-9 !rounded-xl !p-0"
+                                <p-button icon="pi pi-file-pdf" 
+                                        [text]="true"
                                         [pTooltip]="app.cvName && app.cvName !== 'N/A' ? 'Télécharger CV: ' + app.cvName : 'CV non disponible'"
                                         [disabled]="!app.cvNodeId"
-                                        (click)="downloadDocument(app.cvNodeId!, app.cvName)"></button>
-                                <button pButton icon="pi pi-envelope" 
-                                        class="p-button-text p-button-secondary !w-9 !h-9 !rounded-xl !p-0"
+                                        (onClick)="downloadDocument(app.cvNodeId!, app.cvName)"
+                                        styleClass="!w-9 !h-9 !rounded-xl !bg-blue-50/50 dark:!bg-blue-900/10 !text-blue-600 hover:!bg-blue-100 transition-colors" />
+                                <p-button icon="pi pi-envelope" 
+                                        [text]="true"
                                         [pTooltip]="app.letterName && app.letterName !== 'N/A' ? 'Télécharger Lettre: ' + app.letterName : 'Lettre non disponible'"
                                         [disabled]="!app.lettreNodeId"
-                                        (click)="downloadDocument(app.lettreNodeId!, app.letterName)"></button>
+                                        (onClick)="downloadDocument(app.lettreNodeId!, app.letterName)"
+                                        styleClass="!w-9 !h-9 !rounded-xl !bg-indigo-50/50 dark:!bg-indigo-900/10 !text-indigo-600 hover:!bg-indigo-100 transition-colors" />
                             </div>
                         </td>
                         <td class="text-center">
-                            <div class="inline-flex items-center justify-center w-11 h-11 rounded-2xl bg-white dark:bg-slate-800 border shadow-sm font-black text-[11px]"
+                            <div class="inline-flex items-center justify-center w-12 h-12 rounded-[1.25rem] bg-white dark:bg-slate-800 border-2 shadow-inner font-black text-[11px] transition-transform hover:scale-110 cursor-default"
                                 [ngStyle]="{'border-color': getScoreColor(app.iaScore), 'color': getScoreColor(app.iaScore)}">
                                 {{ app.iaScore || 0 }}%
                             </div>
@@ -167,44 +169,55 @@ import { StageService, Stage } from '../../services/stage.service';
                         </td>
                         <td class="text-center">
                             <div class="flex items-center justify-center gap-2">
-                                <div class="inline-flex items-center justify-center px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 border dark:border-slate-700 text-slate-700 dark:text-slate-300 font-black text-[11px]" *ngIf="testScoresMap()[app.id]">
+                                <div class="inline-flex items-center justify-center px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 border dark:border-slate-700 text-slate-700 dark:text-slate-300 font-black text-[11px]" *ngIf="testScoresMap()[app.id] !== undefined && testScoresMap()[app.id] !== null">
                                     {{ testScoresMap()[app.id] | number:'1.0-2' }}%
                                 </div>
                                 <p-button icon="pi pi-chart-bar" [text]="true" size="small" (onClick)="showTestResults(app)" 
                                           pTooltip="Détails du test" tooltipPosition="top"
                                           styleClass="!w-8 !h-8 !p-0" />
-                                <span *ngIf="!testScoresMap()[app.id]" class="text-[10px] text-slate-300 italic">N/A</span>
-                            </div>
-                        </td>
-                        <td class="text-center">
-                            <div class="flex items-center justify-center gap-2">
-                                <p-tag [value]="getStatusLabel(app.status)" [severity]="getSeverity(app.status)" 
-                                       styleClass="text-[9px] font-black uppercase rounded-lg px-3 py-1 tracking-widest" />
-                                <i *ngIf="app.status === 'REFUSEE' && app.raisonRefus" 
-                                   class="pi pi-info-circle text-red-500 cursor-help text-sm" 
-                                   [pTooltip]="'Motif: ' + app.raisonRefus"
-                                   tooltipPosition="top"></i>
+                                <span *ngIf="testScoresMap()[app.id] === undefined || testScoresMap()[app.id] === null" class="text-[10px] text-slate-300 italic">N/A</span>
                             </div>
                         </td>
                         <td class="text-center">
                             <div *ngIf="stageMap[app.id] as stage" class="flex items-center justify-center gap-2">
-                                <p-tag [value]="stage.etat" severity="info" styleClass="text-[9px] font-black uppercase rounded-lg px-2 py-1" />
+                                <div [class]="'px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider border transition-all ' + getStageColorClass(stage.etat)">
+                                    {{ stage.etat }}
+                                </div>
                                 <p-button icon="pi pi-info-circle" [text]="true" size="small" (onClick)="showStageDetails(stage)" 
                                           pTooltip="Détails du stage" tooltipPosition="top"
-                                          styleClass="!w-8 !h-8 !p-0" />
+                                          [styleClass]="'!w-8 !h-8 !p-0 ' + getStageButtonClass(stage.etat)" />
                             </div>
-                            <span *ngIf="!stageMap[app.id]" class="text-[10px] text-slate-300 italic">Aucun stage</span>
+                            <span *ngIf="!stageMap[app.id]" class="text-[10px] text-slate-300 font-bold italic uppercase tracking-tighter opacity-50">Pas de stage</span>
                         </td>
                         <td class="text-center">
-                            <div class="flex justify-center items-center gap-2">
-                                <p-button icon="pi pi-check" [rounded]="true" [text]="true" severity="success" 
-                                          [disabled]="app.status === 'ACCEPTEE' || app.status === 'REFUSEE'"
-                                          (onClick)="openAcceptDialog(app)" pTooltip="Accepter" tooltipPosition="top" 
-                                          styleClass="!w-9 !h-9" />
-                                <p-button icon="pi pi-times" [rounded]="true" [text]="true" severity="danger" 
-                                          [disabled]="app.status === 'ACCEPTEE' || app.status === 'REFUSEE'"
-                                          (onClick)="openRefuseDialog(app)" pTooltip="Refuser" tooltipPosition="top" 
-                                          styleClass="!w-9 !h-9" />
+                            <div class="flex flex-col items-center justify-center gap-3 py-2">
+                                <ng-container *ngIf="app.status === 'EN_ATTENTE'; else finalStatus">
+                                    <div class="flex items-center gap-2 mb-1">
+                                        <span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+                                        <span class="text-[10px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-[0.2em]">En attente</span>
+                                    </div>
+                                    <div class="flex gap-2">
+                                        <p-button icon="pi pi-check" size="small" (onClick)="openAcceptDialog(app)" 
+                                                  pTooltip="Accepter" tooltipPosition="top"
+                                                  styleClass="!bg-emerald-500 !border-none !rounded-xl !text-[10px] !font-black !w-10 !h-10 shadow-md shadow-emerald-500/10 hover:!shadow-lg hover:-translate-y-0.5 transition-all" />
+                                        <p-button icon="pi pi-times" size="small" (onClick)="openRefuseDialog(app)" 
+                                                  pTooltip="Refuser" tooltipPosition="top"
+                                                  styleClass="!bg-rose-500 !border-none !rounded-xl !text-[10px] !font-black !w-10 !h-10 shadow-md shadow-rose-500/10 hover:!shadow-lg hover:-translate-y-0.5 transition-all" />
+                                    </div>
+                                </ng-container>
+                                <ng-template #finalStatus>
+                                    <div class="flex items-center gap-3">
+                                        <p-tag [value]="getStatusLabel(app.status)" [severity]="getSeverity(app.status)" 
+                                               styleClass="text-[10px] font-black uppercase rounded-xl px-5 py-2 tracking-[0.15em] shadow-md border-2 border-white dark:border-slate-800" />
+                                        <div *ngIf="app.status === 'REFUSEE' && app.raisonRefus" 
+                                           class="w-8 h-8 rounded-full bg-rose-50 dark:bg-rose-900/20 flex items-center justify-center text-rose-500 cursor-pointer border border-rose-100 dark:border-rose-800 hover:bg-rose-100 transition-colors shadow-sm hover:shadow-md active:scale-90" 
+                                           (click)="showRefusalReason(app)"
+                                           pTooltip="Voir le motif du refus"
+                                           tooltipPosition="top">
+                                           <i class="pi pi-info-circle text-base"></i>
+                                        </div>
+                                    </div>
+                                </ng-template>
                             </div>
                         </td>
                     </tr>
@@ -358,9 +371,9 @@ import { StageService, Stage } from '../../services/stage.service';
                     <span class="text-[9px] font-black text-slate-400 uppercase tracking-[0.1em]">Encadrant Responsable</span>
                     <div class="flex items-center gap-3">
                         <div class="w-8 h-8 rounded-full bg-[#063970] text-white flex items-center justify-center text-[10px] font-black shadow-sm">
-                            {{ getSupervisorName(selectedStage.encadrantId).charAt(0) }}
+                            {{ getSupervisorName(selectedStage.encadrantId, selectedStage).charAt(0) }}
                         </div>
-                        <span class="text-sm font-black text-[#063970] dark:text-blue-300">{{ getSupervisorName(selectedStage.encadrantId) }}</span>
+                        <span class="text-sm font-black text-[#063970] dark:text-blue-300">{{ getSupervisorName(selectedStage.encadrantId, selectedStage) }}</span>
                     </div>
                 </div>
 
@@ -373,11 +386,6 @@ import { StageService, Stage } from '../../services/stage.service';
                 </div>
             </div>
 
-            <ng-template #footer>
-                <div class="flex justify-end p-4 border-t border-slate-50 dark:border-slate-800">
-                    <p-button label="Fermer la fiche" (onClick)="stageDetailsDialog = false" styleClass="!rounded-xl !font-black !px-6 !bg-[#063970] !border-none" />
-                </div>
-            </ng-template>
         </p-dialog>
 
         <!-- Dialog Détails Résultats Tests -->
@@ -476,6 +484,43 @@ import { StageService, Stage } from '../../services/stage.service';
             </ng-template>
         </p-dialog>
 
+        <!-- Dialog Motif Refus Premium -->
+        <p-dialog [(visible)]="refusalReasonDialog" [modal]="true" [style]="{ width: '450px' }" styleClass="modern-dialog" [draggable]="false" [resizable]="false">
+            <ng-template #header>
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-rose-500 flex items-center justify-center text-white shadow-lg shadow-rose-500/20">
+                        <i class="pi pi-exclamation-circle text-xl"></i>
+                    </div>
+                    <div class="flex flex-col gap-0.5">
+                        <h5 class="m-0 text-xl font-black text-rose-600 dark:text-white tracking-tight">Motif du Refus</h5>
+                        <p class="text-[10px] text-slate-400 font-black uppercase tracking-widest">Feedback Candidature</p>
+                    </div>
+                </div>
+            </ng-template>
+
+            <div *ngIf="selectedRefusalApp" class="flex flex-col gap-6 py-6">
+                <!-- User Context -->
+                <div class="p-4 bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-slate-100 dark:border-slate-700 flex items-center gap-4">
+                    <div class="w-10 h-10 rounded-xl bg-rose-100 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 flex items-center justify-center font-black text-xs">
+                        {{ selectedRefusalApp.firstName.charAt(0) }}{{ selectedRefusalApp.lastName.charAt(0) }}
+                    </div>
+                    <div class="flex flex-col">
+                        <span class="text-sm font-black text-slate-800 dark:text-white">{{ selectedRefusalApp.firstName }} {{ selectedRefusalApp.lastName }}</span>
+                        <span class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{{ selectedRefusalApp.offerTitle }}</span>
+                    </div>
+                </div>
+
+                <!-- Reason Card -->
+                <div class="relative overflow-hidden p-6 bg-white dark:bg-slate-900 rounded-[2rem] border border-rose-100 dark:border-rose-800/50 shadow-xl shadow-rose-500/5">
+                    <div class="absolute -top-6 -right-6 w-24 h-24 bg-rose-50 dark:bg-rose-900/10 rounded-full opacity-50"></div>
+                    <p class="relative m-0 text-slate-600 dark:text-slate-300 text-sm leading-relaxed font-medium italic">
+                        <i class="pi pi-quote-left text-rose-200 dark:text-rose-800 text-2xl absolute -top-2 -left-2 opacity-50"></i>
+                        {{ selectedRefusalApp.raisonRefus }}
+                    </p>
+                </div>
+            </div>
+        </p-dialog>
+
         <p-toast />
         <p-confirmDialog />
 
@@ -524,6 +569,64 @@ import { StageService, Stage } from '../../services/stage.service';
                 border-color: #334155 !important;
                 color: white !important;
             }
+            ::ng-deep .p-tag-success {
+                background: #f0fdf4 !important;
+                color: #16a34a !important;
+                border: 1px solid #bbf7d0 !important;
+            }
+            ::ng-deep .p-tag-danger {
+                background: #fef2f2 !important;
+                color: #dc2626 !important;
+                border: 1px solid #fecaca !important;
+            }
+            ::ng-deep .p-tag-warn {
+                background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%) !important;
+                color: white !important;
+            }
+            ::ng-deep .p-datatable-tbody > tr > td {
+                padding-top: 1.25rem !important;
+                padding-bottom: 1.25rem !important;
+            }
+            ::ng-deep .custom-premium-table .p-datatable-tbody > tr:hover {
+                transform: scale(1.002);
+                box-shadow: 0 4px 20px -5px rgba(0,0,0,0.05);
+                z-index: 10;
+                position: relative;
+            }
+            :host-context(.dark) ::ng-deep .custom-premium-table .p-datatable-tbody > tr:hover {
+                box-shadow: 0 4px 20px -5px rgba(0,0,0,0.3);
+            }
+            ::ng-deep .stage-orange {
+                background: #fff7ed !important;
+                color: #f97316 !important;
+                border-color: #ffedd5 !important;
+            }
+            ::ng-deep .stage-grey {
+                background: #f8fafc !important;
+                color: #64748b !important;
+                border-color: #f1f5f9 !important;
+            }
+            ::ng-deep .stage-blue {
+                background: #063970 !important;
+                color: white !important;
+                border-color: #063970 !important;
+            }
+            ::ng-deep .stage-red-neon {
+                background: #ff003c !important;
+                color: white !important;
+                border-color: #ff003c !important;
+                box-shadow: 0 0 12px rgba(255, 0, 60, 0.4);
+                text-shadow: 0 0 5px rgba(255, 255, 255, 0.5);
+            }
+            ::ng-deep .stage-default {
+                background: #f1f5f9 !important;
+                color: #475569 !important;
+                border-color: #e2e8f0 !important;
+            }
+            ::ng-deep .btn-stage-orange { color: #f97316 !important; }
+            ::ng-deep .btn-stage-grey { color: #64748b !important; }
+            ::ng-deep .btn-stage-blue { color: #063970 !important; }
+            ::ng-deep .btn-stage-red { color: #ff003c !important; }
         </style>
     `
 })
@@ -536,7 +639,7 @@ export class ApplicationManagement implements OnInit {
     // Users and Encadrants
     allUsers: User[] = [];
     availableSupervisors: any[] = [];
-    
+
     // Stages
     stageMap: { [candidatureId: string]: Stage } = {};
     selectedStage: Stage | null = null;
@@ -544,11 +647,13 @@ export class ApplicationManagement implements OnInit {
 
     // Selection for actions
     selectedApp: InternshipApplication | null = null;
-    
+
     // Dialogs
     acceptDialog = false;
     refuseDialog = false;
     testResultsDialog = false;
+    refusalReasonDialog = false;
+    selectedRefusalApp: InternshipApplication | null = null;
 
     acceptForm = {
         dateDebut: null as Date | null,
@@ -563,7 +668,7 @@ export class ApplicationManagement implements OnInit {
     // Test Results
     selectedTestResults: TestAttemptResponse[] = [];
     selectedAppForTest: InternshipApplication | null = null;
-    testScoresMap = signal<{[key: string]: number}>({});
+    testScoresMap = signal<{ [key: string]: number }>({});
 
     private cdr = inject(ChangeDetectorRef);
     public internshipService = inject(InternshipService);
@@ -586,7 +691,7 @@ export class ApplicationManagement implements OnInit {
                     id: u.id,
                     fullName: `${u.firstName} ${u.lastName}`
                 }));
-            
+
             this.cdr.detectChanges();
             await this.loadApplications();
         } catch (err) {
@@ -606,14 +711,14 @@ export class ApplicationManagement implements OnInit {
 
             const mapped = dtos.map(dto => this.mapToInternshipApplication(dto));
             this.applications.set(mapped);
-            
+
             const newStageMap: { [candidatureId: string]: Stage } = {};
             stages.forEach(s => {
                 if (s.candidatureId) newStageMap[s.candidatureId.toString()] = s;
             });
             this.stageMap = newStageMap;
 
-            const scores: {[key: string]: number} = {};
+            const scores: { [key: string]: number } = {};
             await Promise.allSettled(mapped.map(async (app) => {
                 try {
                     const results = await this.testAttemptService.getByCandidature(parseInt(app.id));
@@ -621,9 +726,9 @@ export class ApplicationManagement implements OnInit {
                         const latest = results.reduce((prev: any, current: any) => (prev.id > current.id) ? prev : current);
                         scores[app.id] = latest.score;
                     }
-                } catch (e) {}
+                } catch (e) { }
             }));
-            
+
             this.testScoresMap.set(scores);
             this.cdr.detectChanges();
         } catch (err) {
@@ -645,7 +750,7 @@ export class ApplicationManagement implements OnInit {
             letterName: dto.lettreMotivationName || 'Lettre',
             lettreNodeId: dto.lettreMotivationNodeId || '',
             status: dto.etat as any || 'EN_ATTENTE',
-            date: new Date(),
+            date: dto.dateCreation ? new Date(dto.dateCreation) : new Date(),
             iaScore: dto.scoreAI,
             iaApproved: dto.approvedByAI,
             utilisateurId: dto.utilisateurId?.toString(),
@@ -680,18 +785,35 @@ export class ApplicationManagement implements OnInit {
         try {
             const dateDebutStr = this.acceptForm.dateDebut!.toISOString().split('T')[0];
             const dateFinStr = this.acceptForm.dateFin!.toISOString().split('T')[0];
-            
+
             await this.candidatureService.accepter(
-                parseInt(this.selectedApp.id), 
-                dateDebutStr, 
-                dateFinStr, 
+                parseInt(this.selectedApp.id),
+                dateDebutStr,
+                dateFinStr,
                 this.acceptForm.encadrantId
             );
-            
+
+            // Auto-refuse other pending candidatures from the same user
+            if (this.selectedApp.utilisateurId) {
+                const otherApps = this.applications().filter(
+                    app => app.utilisateurId === this.selectedApp!.utilisateurId &&
+                           app.id !== this.selectedApp!.id &&
+                           app.status === 'EN_ATTENTE'
+                );
+
+                for (const otherApp of otherApps) {
+                    try {
+                        await this.candidatureService.refuser(parseInt(otherApp.id), "Il a déjà un stage");
+                    } catch (refuseErr) {
+                        console.error(`Error auto-refusing application ${otherApp.id}`, refuseErr);
+                    }
+                }
+            }
+
             this.acceptDialog = false;
             await this.loadApplications();
             this.cdr.detectChanges();
-            this.messageService.add({ severity: 'success', summary: 'Succès', detail: 'Candidature acceptée et stage créé.' });
+            this.messageService.add({ severity: 'success', summary: 'Succès', detail: 'Candidature acceptée et stage créé. Les autres candidatures ont été refusées.' });
         } catch (err) {
             this.messageService.add({ severity: 'error', summary: 'Erreur', detail: "Échec de l'acceptation" });
         } finally {
@@ -733,6 +855,12 @@ export class ApplicationManagement implements OnInit {
         this.cdr.detectChanges();
     }
 
+    showRefusalReason(app: InternshipApplication) {
+        this.selectedRefusalApp = app;
+        this.refusalReasonDialog = true;
+        this.cdr.detectChanges();
+    }
+
     getStatusLabel(status: string) {
         switch (status) {
             case 'ACCEPTEE': return 'Accepté';
@@ -758,10 +886,33 @@ export class ApplicationManagement implements OnInit {
         return '#ef4444';
     }
 
-    getSupervisorName(id: string | undefined): string {
+    getSupervisorName(id: string | undefined, stage?: any): string {
+        if (stage?.encadrantFirstName || stage?.encadrantLastName) {
+            return `${stage.encadrantFirstName ?? ''} ${stage.encadrantLastName ?? ''}`.trim();
+        }
         if (!id) return 'N/A';
         const superv = this.allUsers.find(u => u.id === id);
         return superv ? `${superv.firstName} ${superv.lastName}` : 'N/A';
+    }
+
+    getStageColorClass(etat: string) {
+        if (!etat) return 'stage-default';
+        const e = etat.toUpperCase();
+        if (e.includes('COURS')) return 'stage-orange';
+        if (e.includes('ACCEPTE')) return 'stage-grey';
+        if (e.includes('VALIDE') && !e.includes('NON')) return 'stage-blue';
+        if (e.includes('NON_VALIDE') || e.includes('NON VALIDE')) return 'stage-red-neon';
+        return 'stage-default';
+    }
+
+    getStageButtonClass(etat: string) {
+        if (!etat) return '';
+        const e = etat.toUpperCase();
+        if (e.includes('COURS')) return 'btn-stage-orange';
+        if (e.includes('ACCEPTE')) return 'btn-stage-grey';
+        if (e.includes('VALIDE') && !e.includes('NON')) return 'btn-stage-blue';
+        if (e.includes('NON_VALIDE') || e.includes('NON VALIDE')) return 'btn-stage-red';
+        return '';
     }
 
     onGlobalFilter(table: any, event: Event) {

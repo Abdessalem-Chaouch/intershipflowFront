@@ -16,6 +16,7 @@ export interface CandidatureResponseDto {
     scoreAI: number;
     offreStageId: number;
     raisonRefus?: string;
+    dateCreation?: string;
 }
 
 @Injectable({
