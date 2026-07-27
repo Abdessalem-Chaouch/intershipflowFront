@@ -253,7 +253,7 @@ export interface GroupedStagiaire {
 
                                 <!-- Actions Block -->
                                 <div *ngIf="stage.etat !== 'VALIDE' && stage.etat !== 'NON_VALIDE' && stage.etat !== 'ANNULE'" 
-                                     class="flex justify-end pt-3 border-t" [class.border-white/5]="layoutService.isDarkTheme()" [class.border-slate-100]="!layoutService.isDarkTheme()">
+                                     class="flex justify-center pt-3 border-t" [class.border-white/5]="layoutService.isDarkTheme()" [class.border-slate-100]="!layoutService.isDarkTheme()">
                                     <p-button label="Annuler le stage" icon="pi pi-ban" severity="danger" [text]="true" size="small"
                                               (onClick)="confirmCancellation(stage)"
                                               styleClass="p-0 text-red-500 hover:text-red-700 font-bold text-xs uppercase tracking-widest border-none hover:bg-transparent" />
@@ -288,7 +288,7 @@ export interface GroupedStagiaire {
             to { opacity: 1; transform: translateY(0); }
         }
     `],
-    providers: [MessageService]
+    providers: [MessageService, ConfirmationService]
 })
 export class MesStagiairesComponent implements OnInit {
     stagiaires = signal<GroupedStagiaire[]>([]);

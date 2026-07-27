@@ -1,0 +1,5 @@
+sonar.projectKey=FrontendP
+sonar.projectName=FrontendP
+sonar.sources=src
+sonar.host.url=http://localhost:9000
+sonar.sourceEncoding=UTF-8

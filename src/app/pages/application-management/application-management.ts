@@ -1,4 +1,4 @@
-import { Component, OnInit, signal, ChangeDetectorRef, inject } from '@angular/core';
+import { Component, OnInit, signal, computed, ChangeDetectorRef, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TableModule } from 'primeng/table';
@@ -69,7 +69,9 @@ import { StageService, Stage } from '../../services/stage.service';
             <!-- Main Table -->
             <p-table
                 #dt
-                [value]="applications()"
+                [value]="enrichedApplications()"
+                [columns]="exportColumns"
+                csvSeparator=";"
                 [rows]="10"
                 [paginator]="true"
                 [globalFilterFields]="['firstName', 'lastName', 'offerTitle', 'status']"
@@ -86,7 +88,7 @@ import { StageService, Stage } from '../../services/stage.service';
                     <div class="flex flex-wrap items-center justify-between px-4 pt-4 pb-6 gap-4">
                         <div class="flex items-center gap-3">
                            <span class="text-[11px] font-black text-[#063970] dark:text-blue-300 uppercase tracking-widest bg-[#063970]/5 dark:bg-[#063970]/20 px-4 py-2 rounded-xl border border-[#063970]/10">
-                                {{applications().length}} Candidature(s)
+                                {{enrichedApplications().length}} Candidature(s)
                            </span>
                         </div>
                         <div class="flex flex-wrap items-center gap-4">
@@ -635,6 +637,34 @@ export class ApplicationManagement implements OnInit {
     selectedOffer: string | null = null;
     loading = signal<boolean>(false);
     isSubmitting = false;
+
+    exportColumns = [
+        { field: 'nomComplet', header: 'Candidat' },
+        { field: 'offerTitle', header: 'Offre' },
+        { field: 'iaScoreText', header: 'Score IA' },
+        { field: 'iaApprovedText', header: 'Approuvé IA' },
+        { field: 'testScoreText', header: 'Score Test' },
+        { field: 'stageStatusText', header: 'État Stage' },
+        { field: 'statusText', header: 'Statut' }
+    ];
+
+    enrichedApplications = computed(() => {
+        const apps = this.applications();
+        const scores = this.testScoresMap();
+        return apps.map(app => {
+            const stage = this.stageMap[app.id];
+            const score = scores[app.id];
+            return {
+                ...app,
+                nomComplet: `${app.lastName} ${app.firstName}`,
+                iaScoreText: app.iaScore ? `${app.iaScore}%` : 'N/A',
+                iaApprovedText: app.iaApproved ? 'OUI' : 'NON',
+                testScoreText: (score !== undefined && score !== null) ? `${score}%` : 'N/A',
+                stageStatusText: stage ? stage.etat : 'Pas de stage',
+                statusText: this.getStatusLabel(app.status)
+            };
+        });
+    });
 
     // Users and Encadrants
     allUsers: User[] = [];

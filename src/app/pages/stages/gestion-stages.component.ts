@@ -136,13 +136,13 @@ import { InputIconModule } from 'primeng/inputicon';
                             </td>
                             <td class="py-6 px-8">
                                 <div (click)="openDateDialog(stage)" 
-                                     [pTooltip]="stage.etat === 'VALIDE' ? 'Planning verrouillé (Stage Validé)' : 'Modifier le planning'"
-                                     class="cursor-pointer group/date flex flex-col gap-1 hover:translate-x-1 transition-transform">
+                                     [pTooltip]="getTooltipText(stage)"
+                                     [class]="!canEditDates(stage) ? 'cursor-pointer flex flex-col gap-1 opacity-60 hover:opacity-100 transition-opacity' : 'cursor-pointer group/date flex flex-col gap-1 hover:translate-x-1 transition-transform'">
                                     <div class="flex items-center gap-2 text-[11px] font-bold"
-                                         [ngClass]="stage.etat === 'VALIDE' ? 'text-slate-400' : 'text-slate-600 dark:text-slate-300'">
-                                        <i class="pi pi-calendar text-[10px]" [ngClass]="stage.etat === 'VALIDE' ? 'text-slate-300' : 'text-blue-500'"></i>
+                                         [ngClass]="!canEditDates(stage) ? 'text-slate-400' : 'text-slate-600 dark:text-slate-300'">
+                                        <i class="pi pi-calendar text-[10px]" [ngClass]="!canEditDates(stage) ? 'text-slate-300' : 'text-blue-500'"></i>
                                         <span>{{ stage.dateDebut | date:'dd/MM/yyyy' }}</span>
-                                        <i *ngIf="stage.etat === 'VALIDE'" class="pi pi-lock text-[8px] opacity-50 ml-1"></i>
+                                        <i *ngIf="!canEditDates(stage)" class="pi pi-lock text-[8px] opacity-50 ml-1"></i>
                                     </div>
                                     <div class="flex items-center gap-2 text-[10px] font-medium text-slate-400">
                                         <i class="pi pi-arrow-right opacity-30"></i>
@@ -242,14 +242,14 @@ import { InputIconModule } from 'primeng/inputicon';
                   styleClass="modern-dialog-clean p-0 overflow-hidden rounded-[2.5rem] shadow-2xl border-none">
             <div class="relative overflow-hidden bg-white dark:bg-slate-900 transition-colors duration-300">
                 <!-- Header -->
-                <div [ngClass]="selectedStage?.etat === 'VALIDE' ? 'from-slate-500 to-slate-700 dark:from-slate-700 dark:to-slate-900' : 'from-blue-600 to-indigo-900'"
-                     class="bg-gradient-to-br p-8 text-white relative">
+                <div [ngClass]="!canEditDates(selectedStage) ? 'from-slate-500 to-slate-700 dark:from-slate-700 dark:to-slate-900' : 'from-blue-600 to-indigo-900'"
+                                     class="bg-gradient-to-br p-8 text-white relative">
                     <div class="relative z-10">
                         <div class="flex items-center justify-between">
                             <div class="flex items-center gap-3 mb-2">
-                                <i [class]="selectedStage?.etat === 'VALIDE' ? 'pi pi-lock' : 'pi pi-calendar-plus'" class="text-xl"></i>
+                                <i [class]="!canEditDates(selectedStage) ? 'pi pi-lock' : 'pi pi-calendar-plus'" class="text-xl"></i>
                                 <h3 class="text-xl font-black tracking-tight">
-                                    {{ selectedStage?.etat === 'VALIDE' ? 'Planning Verrouillé' : 'Ajustement du Planning' }}
+                                    {{ !canEditDates(selectedStage) ? 'Planning Verrouillé' : 'Ajustement du Planning' }}
                                 </h3>
                             </div>
                             <button (click)="showDateDialog.set(false)" class="cursor-pointer w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-all">
@@ -264,22 +264,42 @@ import { InputIconModule } from 'primeng/inputicon';
 
                 <!-- Body -->
                 <div class="p-10 space-y-8">
-                    <div *ngIf="selectedStage?.etat === 'VALIDE'" 
+                    <!-- Warning for Validated, Cancelled, or Rejected stages -->
+                    <div *ngIf="selectedStage?.etat === 'VALIDE' || selectedStage?.etat === 'ANNULE' || selectedStage?.etat === 'NON_VALIDE'" 
                          class="p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-800 rounded-2xl flex gap-3 items-start mb-2">
                         <i class="pi pi-exclamation-circle text-amber-500 mt-0.5"></i>
                         <p class="text-[11px] font-bold text-amber-700 dark:text-amber-400 leading-relaxed uppercase tracking-wider">
-                            Ce stage est validé. Les dates ne peuvent plus être modifiées pour garantir l'intégrité de l'attestation.
+                            {{ selectedStage?.etat === 'VALIDE' ? "Ce stage est validé. Les dates ne peuvent plus être modifiées pour garantir l'intégrité de l'attestation." : (selectedStage?.etat === 'ANNULE' ? "Ce stage est annulé. Les dates ne peuvent plus être modifiées." : "Ce stage n'est pas valide. Les dates ne peuvent plus être modifiées.") }}
                         </p>
                     </div>
 
-                    <div class="grid grid-cols-1 gap-8" [ngClass]="{'opacity-60 pointer-events-none': selectedStage?.etat === 'VALIDE'}">
+                    <!-- Info banner for In Progress stages when editable -->
+                    <div *ngIf="selectedStage?.etat === 'EN_COURS' && canEditDates(selectedStage)" 
+                         class="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 rounded-2xl flex gap-3 items-start mb-2">
+                        <i class="pi pi-info-circle text-blue-500 mt-0.5"></i>
+                        <p class="text-[11px] font-bold text-blue-700 dark:text-blue-400 leading-relaxed uppercase tracking-wider">
+                            Ce stage est en cours. Seule la date de fin peut être modifiée.
+                        </p>
+                    </div>
+
+                    <!-- Read-only banner for supervisors (Encadrant) on editable states -->
+                    <div *ngIf="userService.currentUser()?.role === 'Encadrant' && selectedStage?.etat !== 'VALIDE' && selectedStage?.etat !== 'ANNULE' && selectedStage?.etat !== 'NON_VALIDE'" 
+                         class="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 rounded-2xl flex gap-3 items-start mb-2">
+                        <i class="pi pi-info-circle text-blue-500 mt-0.5"></i>
+                        <p class="text-[11px] font-bold text-blue-700 dark:text-blue-400 leading-relaxed uppercase tracking-wider">
+                            Ce planning est en lecture seule. Seuls les administrateurs et RH peuvent modifier les dates.
+                        </p>
+                    </div>
+
+                    <div class="grid grid-cols-1 gap-8" [ngClass]="{'opacity-60 pointer-events-none': !canEditDates(selectedStage)}">
                         <div class="flex flex-col gap-3 group">
                             <label class="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-1 transition-colors group-focus-within:text-blue-500">
                                 Date de début effective
                             </label>
                             <p-datepicker [(ngModel)]="newDateDebut" [showIcon]="true" appendTo="body" 
                                           styleClass="w-full modern-datepicker-v2"
-                                          [readonlyInput]="selectedStage?.etat === 'VALIDE'" />
+                                          [disabled]="!canEditDates(selectedStage) || selectedStage?.etat === 'EN_COURS'"
+                                          [readonlyInput]="!canEditDates(selectedStage) || selectedStage?.etat === 'EN_COURS'" />
                         </div>
                         <div class="flex flex-col gap-3 group">
                             <label class="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-1 transition-colors group-focus-within:text-blue-500">
@@ -287,7 +307,8 @@ import { InputIconModule } from 'primeng/inputicon';
                             </label>
                             <p-datepicker [(ngModel)]="newDateFin" [showIcon]="true" appendTo="body" 
                                           styleClass="w-full modern-datepicker-v2"
-                                          [readonlyInput]="selectedStage?.etat === 'VALIDE'" />
+                                          [disabled]="!canEditDates(selectedStage)"
+                                          [readonlyInput]="!canEditDates(selectedStage)" />
                         </div>
                     </div>
                 </div>
@@ -295,7 +316,7 @@ import { InputIconModule } from 'primeng/inputicon';
                 <!-- Footer -->
                 <div class="px-10 py-8 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-100 dark:border-slate-800/50 flex items-center justify-between">
                     <p-button label="Fermer" (click)="showDateDialog.set(false)" [text]="true" severity="secondary" styleClass="font-bold text-xs uppercase tracking-widest" />
-                    <p-button *ngIf="selectedStage?.etat !== 'VALIDE'" 
+                    <p-button *ngIf="canEditDates(selectedStage)" 
                              label="Sauvegarder" icon="pi pi-check" (click)="saveDates()" 
                              styleClass="bg-blue-600 hover:bg-blue-700 border-none rounded-2xl px-10 py-4 font-black shadow-lg shadow-blue-500/20 text-xs uppercase tracking-widest" />
                 </div>
@@ -404,16 +425,33 @@ import { InputIconModule } from 'primeng/inputicon';
             background: #0f172a;
             color: #f8fafc;
         }
-        :host ::ng-deep .modern-datepicker-v2 input:focus {
+        :host ::ng-deep .modern-datepicker-v2 input:focus:not(:disabled) {
             border-color: #3b82f6;
             background: #ffffff;
             box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
             transform: translateY(-1px);
         }
-        .dark :host ::ng-deep .modern-datepicker-v2 input:focus {
+        .dark :host ::ng-deep .modern-datepicker-v2 input:focus:not(:disabled) {
             border-color: #60a5fa;
             background: #1e293b;
             box-shadow: 0 0 0 4px rgba(96, 165, 250, 0.1);
+        }
+        /* Style for disabled datepicker input fields */
+        :host ::ng-deep .modern-datepicker-v2.p-disabled input,
+        :host ::ng-deep .modern-datepicker-v2 input:disabled {
+            background: #e2e8f0 !important;
+            color: #94a3b8 !important;
+            border-color: #cbd5e1 !important;
+            cursor: not-allowed !important;
+            opacity: 0.85;
+        }
+        .dark :host ::ng-deep .modern-datepicker-v2.p-disabled input,
+        .dark :host ::ng-deep .modern-datepicker-v2 input:disabled {
+            background: #1e293b !important;
+            color: #64748b !important;
+            border-color: #334155 !important;
+            cursor: not-allowed !important;
+            opacity: 0.85;
         }
         :host ::ng-deep .p-datepicker:not(.p-datepicker-inline) {
             border-radius: 1.5rem;
@@ -487,7 +525,7 @@ import { InputIconModule } from 'primeng/inputicon';
 export class GestionStagesComponent implements OnInit {
     private stageService = inject(StageService);
     private documentService = inject(DocumentStageService);
-    private userService = inject(UserService);
+    public userService = inject(UserService);
     private attestationService = inject(AttestationService);
     private messageService = inject(MessageService);
     private confirmationService = inject(ConfirmationService);
@@ -518,6 +556,22 @@ export class GestionStagesComponent implements OnInit {
     mappedStages = computed(() => {
         return this.stages();
     });
+
+    canEditDates(stage: Stage | null | undefined): boolean {
+        if (!stage) return false;
+        const user = this.userService.currentUser();
+        const hasPermission = user?.role === 'Admin' || user?.role === 'RH';
+        const isStateEditable = stage.etat !== 'VALIDE' && stage.etat !== 'ANNULE' && stage.etat !== 'NON_VALIDE';
+        return hasPermission && isStateEditable;
+    }
+
+    getTooltipText(stage: Stage): string {
+        if (stage.etat === 'VALIDE') return 'Voir le planning (verrouillé - Stage Validé)';
+        if (stage.etat === 'ANNULE') return 'Voir le planning (verrouillé - Stage Annulé)';
+        if (stage.etat === 'NON_VALIDE') return 'Voir le planning (verrouillé - Stage Refusé)';
+        if (!this.canEditDates(stage)) return 'Voir le planning (Lecture seule pour les encadrants)';
+        return 'Modifier le planning';
+    }
 
     async ngOnInit() {
         await this.loadAttestations();
@@ -609,6 +663,7 @@ export class GestionStagesComponent implements OnInit {
     }
 
     openDateDialog(stage: Stage) {
+        console.log('State of clicked stage:', stage.etat);
         this.selectedStage = stage;
         this.newDateDebut = stage.dateDebut ? new Date(stage.dateDebut) : null;
         this.newDateFin = stage.dateFin ? new Date(stage.dateFin) : null;
@@ -617,6 +672,7 @@ export class GestionStagesComponent implements OnInit {
 
     async saveDates() {
         if (!this.selectedStage || !this.newDateDebut || !this.newDateFin) return;
+        if (!this.canEditDates(this.selectedStage)) return;
         try {
             const debutStr = this.newDateDebut.toISOString().split('T')[0];
             const finStr = this.newDateFin.toISOString().split('T')[0];
@@ -624,8 +680,17 @@ export class GestionStagesComponent implements OnInit {
             this.messageService.add({ severity: 'success', summary: 'Dates modifiées', detail: 'Le planning du stage a été mis à jour.' });
             this.showDateDialog.set(false);
             this.loadStages();
-        } catch (err) {
-            this.messageService.add({ severity: 'error', summary: 'Erreur', detail: 'Impossible de modifier les dates.' });
+        } catch (err: any) {
+            console.error(err);
+            let detailMsg = 'Impossible de modifier les dates.';
+            if (err?.status === 403) {
+                detailMsg = "Vous n'avez pas l'autorisation de modifier les dates de ce stage.";
+            } else if (err?.error?.message) {
+                detailMsg = err.error.message;
+            } else if (err?.message) {
+                detailMsg = err.message;
+            }
+            this.messageService.add({ severity: 'error', summary: 'Erreur', detail: detailMsg });
         }
     }
 

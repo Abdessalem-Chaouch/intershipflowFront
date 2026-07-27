@@ -96,8 +96,40 @@ export class Login {
             
         } catch (err: any) {
             console.error(err);
-            const errorMsg = err.message || 'Nom d\'utilisateur ou mot de passe incorrect';
-            this.messageService.add({ severity: 'error', summary: 'Erreur', detail: errorMsg, life: 3000 });
+            let errorMsg = 'Une erreur est survenue lors de la connexion';
+            
+            if (err && typeof err === 'object') {
+                const body = err.error;
+                const status = err.status;
+                
+                const isBodyDisabled = (str: string) => {
+                    const s = str.toLowerCase();
+                    return s.includes('disabled') || s.includes('desactive') || s.includes('désactivé') || s.includes('inactive');
+                };
+                
+                let bodyText = '';
+                if (typeof body === 'string') {
+                    bodyText = body;
+                } else if (body && typeof body === 'object') {
+                    bodyText = JSON.stringify(body);
+                }
+                
+                const messageText = err.message || '';
+                
+                if (isBodyDisabled(bodyText) || isBodyDisabled(messageText)) {
+                    errorMsg = 'Votre compte est désactivé. Veuillez contacter l\'administrateur.';
+                } else if (status === 401) {
+                    errorMsg = 'Nom d\'utilisateur ou mot de passe incorrect.';
+                } else if (status === 403) {
+                    errorMsg = 'Accès refusé. Vous n\'êtes pas autorisé à vous connecter.';
+                } else if (status === 0) {
+                    errorMsg = 'Impossible de se connecter au serveur. Veuillez vérifier votre connexion.';
+                } else {
+                    errorMsg = (body && typeof body === 'object' && (body.message || body.error)) || err.message || errorMsg;
+                }
+            }
+            
+            this.messageService.add({ severity: 'error', summary: 'Erreur', detail: errorMsg, life: 4000 });
         } finally {
             this.loading = false;
         }

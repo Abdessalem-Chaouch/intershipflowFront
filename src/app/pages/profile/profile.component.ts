@@ -226,7 +226,35 @@ export class ProfileComponent implements OnInit {
                 }
             },
             error: (err) => {
-                this.messageService.add({ severity: 'error', summary: 'Erreur', detail: 'Impossible de charger le profil' });
+                console.error('Error fetching profile, falling back to local user data', err);
+                const curr = this.userService.currentUser();
+                if (curr) {
+                    const fallbackData: any = {
+                        id: curr.id || '',
+                        username: curr.username || '',
+                        email: curr.email || '',
+                        firstName: curr.firstName || '',
+                        lastName: curr.lastName || '',
+                        role: curr.role || 'User',
+                        photoUrl: curr.photoUrl || null,
+                        phone: curr.phone || null,
+                        address: curr.address || null,
+                        bio: curr.bio || null,
+                        cin: curr.cin || null
+                    };
+                    this.profile.set(fallbackData);
+                    this.updateReq = {
+                        firstName: fallbackData.firstName,
+                        lastName: fallbackData.lastName,
+                        email: fallbackData.email,
+                        cin: fallbackData.cin,
+                        phone: fallbackData.phone,
+                        address: fallbackData.address,
+                        bio: fallbackData.bio
+                    };
+                } else {
+                    this.messageService.add({ severity: 'error', summary: 'Erreur', detail: 'Impossible de charger le profil' });
+                }
             }
         });
     }

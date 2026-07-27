@@ -332,12 +332,16 @@ interface Intern {
                         <label for="username" class="block font-bold mb-2">Nom d'utilisateur</label>
                         <input type="text" pInputText id="username" [(ngModel)]="user.username" required fluid />
                         <small class="text-red-500" *ngIf="submitted && !user.username">Le nom d'utilisateur est requis.</small>
+                        <small class="text-red-500" *ngIf="submitted && user.username && user.username.trim().length < 3">Le nom d'utilisateur doit contenir au moins 3 caractères.</small>
+                        <small class="text-slate-400 dark:text-slate-500 block mt-1" *ngIf="!submitted || (user.username && user.username.trim().length >= 3)">Le nom d'utilisateur doit comporter au moins 3 caractères.</small>
                     </div>
 
-                    <div *ngIf="!user.id">
-                        <label for="password" class="block font-bold mb-2">Mot de passe</label>
+                    <div>
+                        <label for="password" class="block font-bold mb-2">
+                            Mot de passe <span *ngIf="user.id" class="text-xs text-slate-400 dark:text-slate-500 font-normal">(laisser vide pour ne pas modifier)</span>
+                        </label>
                         <p-password id="password" [(ngModel)]="user.password" [toggleMask]="true" [fluid]="true" [feedback]="true" placeholder="Mot de passe"></p-password>
-                        <small class="text-red-500" *ngIf="submitted && !user.password">Le mot de passe est requis.</small>
+                        <small class="text-red-500" *ngIf="submitted && !user.id && !user.password">Le mot de passe est requis.</small>
                     </div>
 
                     <div>
@@ -1229,11 +1233,12 @@ export class UserManagement implements OnInit {
     viewUserDetails(user: User) {
         this.selectedUserDetails = user;
         this.userDetailsDialog = true;
+        this.cdr.detectChanges();
     }
 
     editFromDetails() {
         if (this.selectedUserDetails) {
-            this.user = { ...this.selectedUserDetails };
+            this.user = { ...this.selectedUserDetails, password: '' };
             this.oldUsername = this.user.username || null;
             this.userDetailsDialog = false;
             this.userDialog = true;
@@ -1242,7 +1247,7 @@ export class UserManagement implements OnInit {
     }
 
     editUser(user: User) {
-        this.user = { ...user };
+        this.user = { ...user, password: '' };
         this.oldUsername = user.username || null;
         this.userDialog = true;
         this.cdr.detectChanges();
@@ -1330,13 +1335,12 @@ export class UserManagement implements OnInit {
                 }
             }
         });
+        this.cdr.detectChanges();
     }
 
     hideDialog() {
-        setTimeout(() => {
-            this.userDialog = false;
-            this.submitted = false;
-        });
+        this.userDialog = false;
+        this.submitted = false;
     }
 
     deleteUser(user: User) {
@@ -1363,6 +1367,7 @@ export class UserManagement implements OnInit {
                 }
             }
         });
+        this.cdr.detectChanges();
     }
 
     async saveUser() {
@@ -1378,7 +1383,7 @@ export class UserManagement implements OnInit {
 
         const hasPasswordIfNew = isNewUser ? (this.user.password && this.user.password.trim().length > 0) : true;
 
-        if (this.user.firstName?.trim() && this.user.lastName?.trim() && this.user.email?.trim() && this.user.username?.trim() && this.user.role && hasPasswordIfNew) {
+        if (this.user.firstName?.trim() && this.user.lastName?.trim() && this.user.email?.trim() && this.user.username?.trim() && this.user.username.trim().length >= 3 && this.user.role && hasPasswordIfNew) {
             this.loading.set(true);
             try {
                 if (this.user.id && this.oldUsername) {
@@ -1390,19 +1395,29 @@ export class UserManagement implements OnInit {
                 }
 
                 await this.loadUsers();
-                setTimeout(() => {
-                    this.userDialog = false;
-                    this.user = {};
-                });
+                this.userDialog = false;
+                this.user = {};
             } catch (err: any) {
-                // ... (rest of the catch block is already there, just need to ensure loading is reset)
                 console.error(err);
                 let errorMessage = "Échec de l'enregistrement de l'utilisateur";
 
-                if (err.error && typeof err.error === 'string') {
-                    errorMessage = err.error;
-                } else if (err.message) {
-                    errorMessage = err.message;
+                const rawError = (err.error && typeof err.error === 'string') ? err.error : (err.message || '');
+                const errorStr = rawError.toLowerCase();
+
+                if (errorStr.includes('error-invalid-length') || errorStr.includes('invalid-length') || errorStr.includes('invalid length') || errorStr.includes('longueur')) {
+                    errorMessage = "Le nom d'utilisateur doit contenir au moins 3 caractères.";
+                } else if (errorStr.includes('déjà utilisé') || errorStr.includes('déjà existe') || errorStr.includes('existe déjà') || errorStr.includes('already exists') || errorStr.includes('409')) {
+                    if (errorStr.includes('email')) {
+                        errorMessage = "Cette adresse e-mail est déjà utilisée par un autre utilisateur.";
+                    } else {
+                        errorMessage = "Ce nom d'utilisateur est déjà utilisé par un autre utilisateur.";
+                    }
+                } else if (errorStr.includes('format') || errorStr.includes('pattern')) {
+                    errorMessage = "Certains champs ne respectent pas le format requis (ex: format d'e-mail invalide).";
+                } else if (rawError.includes('Erreur lors de la mise à jour :') || rawError.includes('Erreur lors de la création :')) {
+                    errorMessage = rawError.replace('Erreur lors de la mise à jour : ', '').replace('Erreur lors de la création : ', '');
+                } else {
+                    errorMessage = rawError || errorMessage;
                 }
 
                 this.messageService.add({

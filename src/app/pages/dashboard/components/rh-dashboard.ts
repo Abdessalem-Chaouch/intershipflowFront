@@ -5,6 +5,7 @@ import { UserService } from '../../../services/user.service';
 import { InternshipService, InternshipApplication, InternshipOffer } from '../../../services/internship.service';
 import { CandidatureService, CandidatureResponseDto } from '../../../services/candidature.service';
 import { LayoutService } from '@/app/layout/service/layout.service';
+import { PredictionService as BackendPredictionService } from '../../../services/prediction.service';
 
 
 @Component({
@@ -292,10 +293,10 @@ import { LayoutService } from '@/app/layout/service/layout.service';
                                 <!-- Live AI Badge overlay -->
                                 <div class="absolute top-4 right-4 flex items-center gap-1.5">
                                     <span class="relative flex h-2 w-2">
-                                        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
-                                        <span class="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
+                                        <span class="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" [ngClass]="backendStatus() === 'OFFLINE' ? 'bg-orange-500' : 'bg-primary'"></span>
+                                        <span class="relative inline-flex rounded-full h-2 w-2" [ngClass]="backendStatus() === 'OFFLINE' ? 'bg-orange-500' : 'bg-primary'"></span>
                                     </span>
-                                    <span class="text-[9px] font-black tracking-widest text-primary uppercase animate-pulse">Analyse IA</span>
+                                    <span class="text-[9px] font-black tracking-widest uppercase animate-pulse" [ngClass]="backendStatus() === 'OFFLINE' ? 'text-orange-500' : 'text-primary'">{{ isLoadingPrediction() ? 'Calcul en cours...' : (backendStatus() === 'OFFLINE' ? 'ML Service Offline' : 'Modèle ML Backend') }}</span>
                                 </div>
 
                                 <!-- Value Display -->
@@ -303,7 +304,11 @@ import { LayoutService } from '@/app/layout/service/layout.service';
                                     <!-- ESTIMATION DES DOSSIERS -->
                                     <div>
                                         <span class="block text-[10px] font-black text-surface-400 dark:text-surface-500 uppercase tracking-widest mb-2 leading-relaxed">ESTIMATION DES DOSSIERS</span>
-                                        <div class="text-4xl font-black text-surface-800 dark:text-white tracking-tight flex items-baseline gap-1.5 select-none leading-tight">
+                                        <div *ngIf="predictionResult().predictedValue !== null" class="text-4xl font-black text-surface-800 dark:text-white tracking-tight flex items-baseline gap-1.5 select-none leading-tight">
+                                            <span class="text-transparent bg-clip-text bg-gradient-to-r from-primary to-indigo-600 dark:from-primary-light dark:to-primary text-5xl font-black">{{ predictionResult().predictedValue }}</span>
+                                            <span class="text-[11px] text-surface-500 dark:text-surface-400 font-bold ml-2">Candidats prédits (Modèle ML)</span>
+                                        </div>
+                                        <div *ngIf="predictionResult().predictedValue === null" class="text-4xl font-black text-surface-800 dark:text-white tracking-tight flex items-baseline gap-1.5 select-none leading-tight">
                                             <span class="text-transparent bg-clip-text bg-gradient-to-r from-surface-800 via-surface-700 to-primary dark:from-white dark:via-surface-100 dark:to-primary-light">{{ predictionResult().min }}</span>
                                             <span class="text-surface-400 dark:text-surface-500 text-lg font-medium">à</span>
                                             <span class="text-transparent bg-clip-text bg-gradient-to-r from-primary to-indigo-600 dark:from-primary-light dark:to-primary">{{ predictionResult().max }}</span>
@@ -395,6 +400,11 @@ import { LayoutService } from '@/app/layout/service/layout.service';
 export class RHDashboard implements OnInit {
     private internshipService = inject(InternshipService);
     private candidatureService = inject(CandidatureService);
+    private backendPredictionService = inject(BackendPredictionService);
+
+    backendPrediction = signal<number | null>(null);
+    backendStatus = signal<string>('UNKNOWN');
+    isLoadingPrediction = signal<boolean>(false);
 
     // All candidatures from DB (via /candidatures/all)
     allCandidatures = computed(() => this.candidatureService.getCandidaturesSignal()());
@@ -479,6 +489,40 @@ export class RHDashboard implements OnInit {
                 }
             } else {
                 this.selectedOfferId.set('');
+            }
+        });
+
+        effect(() => {
+            const tab = this.predictionTab();
+            let competences = '';
+
+            if (tab === 'existing') {
+                const offer = this.selectedOffer();
+                if (offer) {
+                    const parts: string[] = [];
+                    if (offer.competencesRequises) parts.push(offer.competencesRequises);
+                    if (offer.techs && offer.techs.length > 0) parts.push(offer.techs.join(', '));
+                    if (offer.title) parts.push(offer.title);
+                    competences = parts.join(', ');
+                }
+            } else {
+                competences = this.selectedSimTechs().join(', ');
+            }
+
+            if (competences.trim()) {
+                this.isLoadingPrediction.set(true);
+                this.backendPredictionService.predict(competences).then(res => {
+                    this.backendPrediction.set(res.prediction);
+                    this.backendStatus.set(res.status || 'ONLINE');
+                    this.isLoadingPrediction.set(false);
+                }).catch(() => {
+                    this.backendPrediction.set(null);
+                    this.backendStatus.set('OFFLINE');
+                    this.isLoadingPrediction.set(false);
+                });
+            } else {
+                this.backendPrediction.set(null);
+                this.backendStatus.set('UNKNOWN');
             }
         });
     }
@@ -592,6 +636,7 @@ export class RHDashboard implements OnInit {
     predictionResult = computed(() => {
         const tab = this.predictionTab();
         const apps = this.apps();
+        const backendVal = this.backendPrediction();
 
         if (tab === 'new') {
             const techs = this.selectedSimTechs();
@@ -623,28 +668,34 @@ export class RHDashboard implements OnInit {
             let predictedMin = Math.round(baseMin * (1 + skillBonus / 100));
             let predictedMax = Math.round(baseMax * (1 + skillBonus / 100));
 
-            // Adjust based on duration
-            if (duration >= 6) {
-                predictedMin = Math.round(predictedMin * 1.3);
-                predictedMax = Math.round(predictedMax * 1.3);
-            } else if (duration <= 3) {
-                predictedMin = Math.round(predictedMin * 0.85);
-                predictedMax = Math.round(predictedMax * 0.9);
-            }
+            if (backendVal !== null && backendVal > 0) {
+                predictedMin = Math.max(1, Math.round(backendVal * 0.85));
+                predictedMax = Math.round(backendVal * 1.15) + 2;
+                confidence = 95;
+            } else {
+                // Adjust based on duration
+                if (duration >= 6) {
+                    predictedMin = Math.round(predictedMin * 1.3);
+                    predictedMax = Math.round(predictedMax * 1.3);
+                } else if (duration <= 3) {
+                    predictedMin = Math.round(predictedMin * 0.85);
+                    predictedMax = Math.round(predictedMax * 0.9);
+                }
 
-            // Adjust based on modality
-            if (modality === 'tele') {
-                predictedMin = Math.round(predictedMin * 1.25);
-                predictedMax = Math.round(predictedMax * 1.25);
-                confidence += 5;
-            } else if (modality === 'hybride') {
-                predictedMin = Math.round(predictedMin * 1.15);
-                predictedMax = Math.round(predictedMax * 1.15);
-                confidence += 2;
-            } else if (modality === 'presentiel') {
-                predictedMin = Math.round(predictedMin * 0.75);
-                predictedMax = Math.round(predictedMax * 0.75);
-                confidence -= 5;
+                // Adjust based on modality
+                if (modality === 'tele') {
+                    predictedMin = Math.round(predictedMin * 1.25);
+                    predictedMax = Math.round(predictedMax * 1.25);
+                    confidence += 5;
+                } else if (modality === 'hybride') {
+                    predictedMin = Math.round(predictedMin * 1.15);
+                    predictedMax = Math.round(predictedMax * 1.15);
+                    confidence += 2;
+                } else if (modality === 'presentiel') {
+                    predictedMin = Math.round(predictedMin * 0.75);
+                    predictedMax = Math.round(predictedMax * 0.75);
+                    confidence -= 5;
+                }
             }
 
             const score = Math.min(100, Math.round(40 + (skillBonus * 0.8)));
@@ -653,13 +704,14 @@ export class RHDashboard implements OnInit {
             if (techs.length === 0) {
                 rec = "Sélectionnez au moins une compétence pour lancer la simulation.";
             } else if (score >= 85) {
-                rec = "Excellent choix technologique ! Cette offre attirera un grand nombre de profils qualifiés.";
+                rec = "Excellent choix technologique ! Le modèle backend prédit un fort intérêt des candidats.";
             } else {
                 rec = "Bonne configuration de base. Ajoutez du 'Télétravail' ou du 'Hybride' pour augmenter la portée de l'offre.";
             }
 
             return {
                 current: 0,
+                predictedValue: backendVal !== null ? backendVal : null,
                 min: predictedMin,
                 max: predictedMax,
                 score: score,
@@ -674,6 +726,7 @@ export class RHDashboard implements OnInit {
             if (!offer) {
                 return {
                     current: 0,
+                    predictedValue: null,
                     min: 0,
                     max: 0,
                     score: 0,
@@ -713,37 +766,43 @@ export class RHDashboard implements OnInit {
             // 3. Base prediction based on actual count, skills and duration
             let predictedMin = actualCount + 5;
             let predictedMax = actualCount + 15;
-
-            if (skills.length === 0) {
-                predictedMin = Math.max(1, actualCount);
-                predictedMax = actualCount + 5;
-            } else {
-                const multiplier = 1 + (skillBonus / 100);
-                predictedMin = Math.round((actualCount + 4) * multiplier);
-                predictedMax = Math.round((actualCount + 10) * multiplier);
-            }
-
-            // Adjust based on duration
-            const duration = offer.dureeStage || 4;
-            if (duration >= 6) {
-                predictedMin = Math.round(predictedMin * 1.2);
-                predictedMax = Math.round(predictedMax * 1.2);
-            } else if (duration <= 3) {
-                predictedMin = Math.round(predictedMin * 0.9);
-                predictedMax = Math.round(predictedMax * 0.9);
-            }
-
-            // Adjust based on modality / location
-            const loc = (offer.location || '').toLowerCase();
             let confidence = 85;
-            if (loc.includes('tele') || loc.includes('distance')) {
-                predictedMin = Math.round(predictedMin * 1.3);
-                predictedMax = Math.round(predictedMax * 1.3);
-                confidence += 5;
-            } else if (loc.includes('hybrid')) {
-                predictedMin = Math.round(predictedMin * 1.15);
-                predictedMax = Math.round(predictedMax * 1.15);
-                confidence += 2;
+
+            if (backendVal !== null && backendVal > 0) {
+                predictedMin = Math.max(actualCount, Math.round(backendVal * 0.85));
+                predictedMax = Math.max(predictedMin + 2, Math.round(backendVal * 1.15) + 2);
+                confidence = 95;
+            } else {
+                if (skills.length === 0) {
+                    predictedMin = Math.max(1, actualCount);
+                    predictedMax = actualCount + 5;
+                } else {
+                    const multiplier = 1 + (skillBonus / 100);
+                    predictedMin = Math.round((actualCount + 4) * multiplier);
+                    predictedMax = Math.round((actualCount + 10) * multiplier);
+                }
+
+                // Adjust based on duration
+                const duration = offer.dureeStage || 4;
+                if (duration >= 6) {
+                    predictedMin = Math.round(predictedMin * 1.2);
+                    predictedMax = Math.round(predictedMax * 1.2);
+                } else if (duration <= 3) {
+                    predictedMin = Math.round(predictedMin * 0.9);
+                    predictedMax = Math.round(predictedMax * 0.9);
+                }
+
+                // Adjust based on modality / location
+                const loc = (offer.location || '').toLowerCase();
+                if (loc.includes('tele') || loc.includes('distance')) {
+                    predictedMin = Math.round(predictedMin * 1.3);
+                    predictedMax = Math.round(predictedMax * 1.3);
+                    confidence += 5;
+                } else if (loc.includes('hybrid')) {
+                    predictedMin = Math.round(predictedMin * 1.15);
+                    predictedMax = Math.round(predictedMax * 1.15);
+                    confidence += 2;
+                }
             }
 
             // Ensure bounds
@@ -757,7 +816,7 @@ export class RHDashboard implements OnInit {
             if (skills.length === 0) {
                 rec = "Ajoutez des technologies clés (ex: Angular, Spring Boot) pour augmenter l'attractivité de l'offre.";
             } else if (score >= 85) {
-                rec = "Excellente combinaison de compétences ! L'offre est extrêmement attractive. Préparez-vous à recevoir un grand volume de candidatures.";
+                rec = "Excellente combinaison de compétences ! L'offre est extrêmement attractive selon la prédiction du modèle backend.";
             } else if (skills.some(s => s.toLowerCase().includes('angular') && !skills.some(x => x.toLowerCase().includes('typescript')))) {
                 rec = "Conseil : Ajoutez la compétence 'TypeScript' pour préciser le profil recherché.";
             } else {
@@ -766,6 +825,7 @@ export class RHDashboard implements OnInit {
 
             return {
                 current: actualCount,
+                predictedValue: backendVal !== null ? backendVal : null,
                 min: predictedMin,
                 max: predictedMax,
                 score: score,

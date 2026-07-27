@@ -326,6 +326,7 @@ export class UserService {
             email: user.email,
             firstName: user.firstName,
             lastName: user.lastName,
+            password: user.password,
             role: user.role?.toLowerCase()
         };
         try {
