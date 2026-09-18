@@ -28,7 +28,7 @@ import { ToastModule } from 'primeng/toast';
             <div class="grid grid-cols-12 gap-10 items-stretch">
 
                 <!-- LEFT SIDE (Contact Info) -->
-                <div class="col-span-12 md:col-span-5 flex flex-col gap-6 h-full">
+                <div data-tour="contact-info" class="col-span-12 md:col-span-5 flex flex-col gap-6 h-full">
 
                     <!-- flex-1 to each box makes them equal in height and fills the container -->
                     <div class="flex flex-1 items-start gap-5 p-6 bg-white dark:bg-[#063970] rounded-2xl border border-gray-100 dark:border-blue-800/40 shadow-sm hover:shadow-md hover:translate-y-[-2px] transition-all cursor-default text-lg">
@@ -67,7 +67,7 @@ import { ToastModule } from 'primeng/toast';
                 </div>
 
                 <!-- RIGHT SIDE (Contact Form) -->
-                <div class="col-span-12 md:col-span-7 h-full">
+                <div data-tour="contact-form" class="col-span-12 md:col-span-7 h-full">
 
                     <form (ngSubmit)="onSubmit()" #contactFormRef="ngForm" class="h-full p-8 lg:p-10 bg-white dark:bg-[#063970] rounded-3xl border border-gray-100 dark:border-blue-800/40 shadow-xl dark:shadow-none flex flex-col gap-6 transition-all">
 

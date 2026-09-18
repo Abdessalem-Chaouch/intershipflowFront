@@ -124,7 +124,7 @@ export class UserService {
                     {
                         label: 'Paramètres / Profil',
                         icon: 'pi pi-cog',
-                        command: () => { 
+                        command: () => {
                             this.router.navigate(['/landing/profile']);
                         }
                     }
@@ -153,10 +153,10 @@ export class UserService {
     private initializeAuth() {
         const storedToken = localStorage.getItem('auth_token');
         const storedUser = localStorage.getItem('user_data');
-        
+
         if (storedToken) {
             this.token.set(storedToken);
-            
+
             if (storedUser) {
                 try {
                     this.currentUser.set(JSON.parse(storedUser));
@@ -500,13 +500,13 @@ export class UserService {
         );
     }
     resetPasswordWithToken(token: string, newPassword: string): Observable<any> {
-    return this.http.post(
-        `${this.apiUrl}/reset-password-token`,
-        { token, newPassword },
-        { responseType: 'text' as 'json' }
-    );
-}
- 
+        return this.http.post(
+            `${this.apiUrl}/reset-password-token`,
+            { token, newPassword },
+            { responseType: 'text' as 'json' }
+        );
+    }
+
 
     /**
      * Cas 1 — Lien reçu par mail (action token Keycloak)

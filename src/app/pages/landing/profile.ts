@@ -348,7 +348,7 @@ export class LandingProfile implements OnInit {
     updateReq: UpdateProfileRequest = {};
     passwordReq: UpdatePasswordRequest = {};
     confirmPassword = '';
-    
+
     loadingProfile = false;
     loadingPassword = false;
     selectedFile: File | null = null;
@@ -445,15 +445,15 @@ export class LandingProfile implements OnInit {
         this.loadingProfile = true;
         try {
             const updated = await this.profileService.updateProfile(this.updateReq, this.selectedFile || undefined);
-            
+
             if (updated.photoUrl && !updated.photoUrl.startsWith('http')) {
                 updated.photoUrl = `http://localhost:8081/profile/photo/${updated.photoUrl}`;
             }
-            
+
             this.profile.set(updated);
             this.selectedFile = null;
             this.messageService.add({ severity: 'success', summary: 'Succès', detail: 'Profil mis à jour' });
-            
+
             const currentUser = this.userService.currentUser();
             if (currentUser) {
                 this.userService.currentUser.set({
@@ -467,7 +467,7 @@ export class LandingProfile implements OnInit {
         } catch (err: any) {
             console.error('Update error:', err);
             let detail = 'Échec de la mise à jour';
-            
+
             // Handle CIN already exists error
             const errorMessage = err.error?.message || err.message || '';
             if (errorMessage.toLowerCase().includes('cin')) {
@@ -475,7 +475,7 @@ export class LandingProfile implements OnInit {
             } else if (errorMessage.toLowerCase().includes('email')) {
                 detail = 'Cet email est déjà utilisé';
             }
-            
+
             this.messageService.add({ severity: 'error', summary: 'Erreur', detail });
         } finally {
             this.loadingProfile = false;

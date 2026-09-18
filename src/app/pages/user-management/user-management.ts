@@ -1030,7 +1030,7 @@ export class UserManagement implements OnInit {
         const stageId = currentStage?.id || this.selectedStageUser?.stageId;
 
         if (!this.selectedStageUser || !stageId) return;
-        
+
         this.confirmationService.confirm({
             message: 'Êtes-vous sûr de vouloir désaffecter cet encadrant ?',
             header: 'Confirmation de désaffectation',
@@ -1083,7 +1083,7 @@ export class UserManagement implements OnInit {
                 this.selectedStageUser.encadrantNom = enc.encadrantNom;
                 this.selectedStageUser.encadrantId = enc.encadrantId;
             }
-            
+
             this.showSupervisorSelect = false;
             this.selectedSupervisorId = null;
         } catch (err) {
@@ -1126,7 +1126,7 @@ export class UserManagement implements OnInit {
         }
 
         this.stageDetailsDialog = true;
-        
+
         if (user.id) {
             this.loadHistory(user.id);
         }
@@ -1270,17 +1270,17 @@ export class UserManagement implements OnInit {
             const enrichedUsers = basicUsers.map(user => {
                 if (user.role === 'Stagiaire') {
                     const detail = stagiairesDetails.find(s => s.id === user.id);
-                    
+
                     // Find all stages for this specific user from the global list
                     const userStages = allStages.filter(s => s.utilisateurId === user.id);
-                    
+
                     if (userStages.length > 0) {
                         // Sort by ID descending to get the truly latest stage
                         const latest = [...userStages].sort((a, b) => (b.id || 0) - (a.id || 0))[0];
-                        return { 
-                            ...user, 
-                            ...detail, 
-                            titreOffre: latest.titreOffre, 
+                        return {
+                            ...user,
+                            ...detail,
+                            titreOffre: latest.titreOffre,
                             etat: latest.etat,
                             stageId: latest.id,
                             dateDebutStage: latest.dateDebut,
@@ -1374,7 +1374,7 @@ export class UserManagement implements OnInit {
         this.submitted = true;
 
         const isNewUser = !this.user.id;
-        
+
         // Final security check for RH
         if (this.currentUser()?.role === 'RH' && (this.user.role === 'Admin' || this.user.role === 'RH')) {
             this.messageService.add({ severity: 'error', summary: 'Accès refusé', detail: 'Vous n\'avez pas les permissions pour créer/modifier ce rôle.' });

@@ -53,7 +53,7 @@ import { AffectationService } from '@/app/services/affectation.service';
                     <li><a (click)="router.navigate(['/landing'], { fragment: 'contact' })" pRipple class="px-0 py-2 font-semibold text-lg text-[#063970] dark:text-blue-200 hover:text-blue-500 dark:hover:text-blue-400 transition-colors" style="cursor: pointer;">Contact</a></li>
                     
                     <!-- Added to main list for mobile visibility -->
-                    <li *ngIf="currentUser()?.role === 'Stagiaire'|| currentUser()?.role === 'User'">
+                    <li *ngIf="currentUser()?.role === 'Stagiaire'|| currentUser()?.role === 'User'" data-tour="nav-candidatures">
                         <a (click)="showAppliedDialog()" pRipple class="px-0 py-2 font-semibold text-lg text-[#063970] dark:text-blue-200 hover:text-blue-500 dark:hover:text-blue-400 transition-colors" style="cursor: pointer;">
                             Mes candidatures
                         </a>
@@ -68,14 +68,14 @@ import { AffectationService } from '@/app/services/affectation.service';
                 <app-floating-configurator [float]="false"/>&nbsp;&nbsp;&nbsp;
                 
                 <!-- Auth Section -->
-                <div class="flex items-center gap-4 border-t lg:border-t-0 border-surface-200 dark:border-blue-800/40 pt-6 lg:pt-0 mt-4 lg:mt-0">
+                <div data-tour="nav-auth" class="flex items-center gap-4 border-t lg:border-t-0 border-surface-200 dark:border-blue-800/40 pt-6 lg:pt-0 mt-4 lg:mt-0">
                     
                     <ng-container *ngIf="!currentUser()">
                         <button pButton pRipple label="Connexion" routerLink="/auth/login" [outlined]="true" [rounded]="true" class="font-semibold text-base border-2 px-6 py-3 text-[#063970] dark:text-blue-300 border-[#063970] dark:border-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors" style="background: transparent;"></button>
                         <button pButton pRipple label="S'inscrire" routerLink="/auth/register" [rounded]="true" class="font-semibold text-base border-none px-6 py-3 text-white bg-[#063970] dark:bg-blue-500 hover:bg-blue-900 dark:hover:bg-blue-400 transition-colors"></button>
                     </ng-container>
 
-                    <div #userTrigger *ngIf="currentUser()" 
+                    <div #userTrigger *ngIf="currentUser()" data-tour="nav-profile" 
                          class="flex items-center gap-2 ml-4 bg-[#063970]/5 dark:bg-blue-400/5 rounded-full pl-3 pr-1 py-1 border border-[#063970]/10 dark:border-blue-400/10 cursor-pointer hover:bg-[#063970]/10 dark:hover:bg-blue-400/10 transition-all duration-300 min-w-[200px] justify-between"
                          (click)="userMenu.toggle($event)">
                         <span class="hidden xl:block text-sm font-bold text-[#063970] dark:text-blue-200 whitespace-nowrap px-2">

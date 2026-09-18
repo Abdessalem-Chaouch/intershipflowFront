@@ -189,7 +189,7 @@ export class ProfileComponent implements OnInit {
     updateReq: UpdateProfileRequest = {};
     passwordReq: UpdatePasswordRequest = {};
     confirmPassword = '';
-    
+
     loadingProfile = false;
     loadingPassword = false;
     selectedFile: File | null = null;
@@ -271,15 +271,15 @@ export class ProfileComponent implements OnInit {
         this.loadingProfile = true;
         try {
             const updated = await this.profileService.updateProfile(this.updateReq, this.selectedFile || undefined);
-            
+
             if (updated.photoUrl && !updated.photoUrl.startsWith('http')) {
                 updated.photoUrl = `http://localhost:8081/profile/photo/${updated.photoUrl}`;
             }
-            
+
             this.profile.set(updated);
             this.selectedFile = null;
             this.messageService.add({ severity: 'success', summary: 'Succès', detail: 'Profil mis à jour avec succès' });
-            
+
             // Sync with UserService if needed
             const currentUser = this.userService.currentUser();
             if (currentUser) {

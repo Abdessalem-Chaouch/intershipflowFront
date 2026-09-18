@@ -54,13 +54,14 @@ import { TestTakeComponent } from '../../test-take.component';
                 </div>
 
                 <!-- Offers Container -->
-                <div #scrollContainer 
+                <div #scrollContainer data-tour="offers-list"
                      (scroll)="onScroll()"
                      class="scroll-container flex flex-row gap-8 overflow-x-auto pb-12 pt-8 snap-x px-4"
                      [ngClass]="{'justify-center': originalOffers().length === 1}"
                      [style.scroll-behavior]="isSmooth ? 'smooth' : 'auto'">
                     
-                    <div *ngFor="let offer of originalOffers()" 
+                    <div *ngFor="let offer of originalOffers(); let i = index" 
+                         [attr.data-tour]="i === 0 ? 'offer-card' : null"
                          class="pricing-card group bg-white dark:!bg-[#06111d] border border-slate-100 dark:border-blue-900/20 shadow-sm hover:shadow-xl transition-all duration-500"
                          [class.featured]="offer.highlight">
                         
@@ -128,7 +129,7 @@ import { TestTakeComponent } from '../../test-take.component';
 
                         <!-- Card Footer / Actions -->
                         <div class="p-8 pt-0 mt-auto">
-                            <div class="flex gap-3 h-[52px]">
+                            <div [attr.data-tour]="i === 0 ? 'apply-btn' : null" class="flex gap-3 h-[52px]">
                                 <button pButton pRipple icon="pi pi-info-circle" 
                                         class="p-button-outlined !rounded-xl !w-[52px] !h-[52px] !border-slate-200 dark:!border-slate-700 !text-slate-500 dark:!text-slate-400 hover:!bg-slate-50 dark:hover:!bg-slate-800 transition-all"
                                         (click)="openDetailsDialog(offer)"
