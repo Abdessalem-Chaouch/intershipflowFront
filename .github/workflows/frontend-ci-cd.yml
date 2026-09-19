@@ -52,11 +52,7 @@ jobs:
           password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Build Docker image
-        run: |
-          docker build \
-            -t ${{ secrets.DOCKER_USERNAME }}/internship-frontend:${{ github.sha }} \
-            -t ${{ secrets.DOCKER_USERNAME }}/internship-frontend:latest \
-            .
+        run: docker build -t ${{ secrets.DOCKER_USERNAME }}/internship-frontend:${{ github.sha }} -t ${{ secrets.DOCKER_USERNAME }}/internship-frontend:latest .
 
       - name: Push Docker image
         run: |
